@@ -29,11 +29,34 @@
                 placeholder="Enter your text here..."
                 rows="4"
             >DEFAULT_TEXT_PROMPT</textarea>
+            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <span>Upload .txt</span>
+                    <input
+                        type="file"
+                        id="text-file-input"
+                        class="block text-sm text-gray-700"
+                        accept=".txt,text/plain"
+                    />
+                </label>
+                <span id="char-count" class="text-xs text-gray-500">0 characters</span>
+            </div>
+            <p class="mt-2 text-xs text-gray-500">
+                No hard character limit is enforced; long text is split into tokenizer chunks.
+            </p>
         </div>
 
         <div class="bg-white p-4 rounded-lg shadow">
-            <label for="voice-url-input" class="block text-sm font-medium text-gray-700 mb-2">
-                Optional voice URL (leave empty to use default voice):
+            <label for="voice-select" class="block text-sm font-medium text-gray-700 mb-2">
+                Built-in voice:
+            </label>
+            <select id="voice-select" class="w-full border rounded p-2"></select>
+            <p id="voice-summary" class="text-xs text-gray-500 mt-1">
+                Choose a built-in voice, or use the advanced URL/name override below.
+            </p>
+
+            <label for="voice-url-input" class="block text-sm font-medium text-gray-700 mt-4 mb-2">
+                Advanced voice URL or name override:
             </label>
             <input
                 type="text"
@@ -42,13 +65,7 @@
                 placeholder="hf://kyutai/tts-voices/alba-mackenna/casual.wav"
             />
             <p class="text-xs text-gray-500 mt-1">
-                Supports: http://, https://, or hf:// URLs.<br>
-                You can also use predefined voices (language code in parentheses):<br>
-                "alba" (en), "anna" (en), "azelma" (en), "bill_boerst" (en), "caro_davy" (en),
-                "charles" (en), "cosette" (en), "eponine" (en), "eve" (en), "fantine" (en),
-                "george" (en),  "jane" (en), "javert" (en), "jean" (en),
-                "marius" (en), "mary" (en), "michael" (en), "paul" (en),
-                "peter_yearsley" (en), "stuart_bell" (en), "vera" (en), "giovanni" (it), "lola" (es), "juergen" (de), "rafael" (pt), "estelle" (fr).
+                Supports built-in voice names, http://, https://, or hf:// URLs.
                 <br/>
                 You can find more voices in our
                 <a
@@ -252,9 +269,15 @@
         const audioSection = document.getElementById('audio-section');
         const audio = document.getElementById('audio');
         const downloadLink = document.getElementById('download-link');
+        const textFileInput = document.getElementById('text-file-input');
+        const charCount = document.getElementById('char-count');
+        const voiceSelect = document.getElementById('voice-select');
+        const voiceSummary = document.getElementById('voice-summary');
 
         // Event listeners
         generateBtn.addEventListener('click', generateAudio);
+        textInput.addEventListener('input', updateCharacterCount);
+        textFileInput.addEventListener('change', loadTextFile);
 
         function showStatus(message, isLoading = false) {
             statusText.textContent = message;
@@ -264,6 +287,49 @@
 
         function hideStatus() {
             status.classList.add('hidden');
+        }
+
+        function updateCharacterCount() {
+            const count = textInput.value.length;
+            charCount.textContent = `${count.toLocaleString()} character${count === 1 ? '' : 's'}`;
+        }
+
+        async function loadTextFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type && file.type !== 'text/plain') {
+                showStatus('Please upload a plain .txt file.', false);
+                event.target.value = '';
+                setTimeout(hideStatus, 3000);
+                return;
+            }
+
+            textInput.value = await file.text();
+            updateCharacterCount();
+            showStatus(`Loaded ${file.name}`, false);
+            setTimeout(hideStatus, 3000);
+        }
+
+        async function loadVoices() {
+            const voicesEndpoint = `${window.location.pathname.replace(/\/+$/, '')}/voices`;
+            const response = await fetch(voicesEndpoint);
+            if (!response.ok) return;
+
+            const data = await response.json();
+            voiceSelect.innerHTML = '';
+
+            for (const voice of data.voices) {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
+                if (voice.name === data.default_voice) {
+                    option.selected = true;
+                }
+                voiceSelect.appendChild(option);
+            }
+
+            voiceSummary.textContent = `${data.voices.length} built-in voices. ${data.character_limit_note} Current chunk target: ${data.max_tokens_per_chunk} tokenizer tokens.`;
         }
 
         async function generateAudio() {
@@ -306,6 +372,7 @@
 
                 // Add voice URL if provided (only if no WAV file is uploaded)
                 const voiceUrl = document.getElementById('voice-url-input').value.trim();
+                const selectedVoice = voiceSelect.value;
                 const voiceWavFile = document.getElementById('voice-wav-input').files[0];
 
                 if (voiceWavFile) {
@@ -314,6 +381,8 @@
                 } else if (voiceUrl) {
                     // Only use voice URL if no WAV file is uploaded
                     formData.append('voice_url', voiceUrl);
+                } else if (selectedVoice) {
+                    formData.append('voice_url', selectedVoice);
                 }
 
                 const ttsEndpoint = `${window.location.pathname.replace(/\/+$/, '')}/tts`;
@@ -393,6 +462,8 @@
         // Focus on text input when page loads
         window.addEventListener('load', () => {
             textInput.focus();
+            updateCharacterCount();
+            loadVoices();
         });
     </script>
 </body>

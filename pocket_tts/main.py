@@ -43,6 +43,35 @@ cli_app = typer.Typer(
 # Global model instance
 tts_model: TTSModel | None = None
 
+BUILTIN_VOICE_LANGUAGES = {
+    "alba": "en",
+    "anna": "en",
+    "azelma": "en",
+    "bill_boerst": "en",
+    "caro_davy": "en",
+    "charles": "en",
+    "cosette": "en",
+    "eponine": "en",
+    "eve": "en",
+    "fantine": "en",
+    "george": "en",
+    "jane": "en",
+    "javert": "en",
+    "jean": "en",
+    "marius": "en",
+    "mary": "en",
+    "michael": "en",
+    "paul": "en",
+    "peter_yearsley": "en",
+    "stuart_bell": "en",
+    "vera": "en",
+    "giovanni": "it",
+    "lola": "es",
+    "juergen": "de",
+    "rafael": "pt",
+    "estelle": "fr",
+}
+
 web_app = FastAPI(
     title="Kyutai Pocket TTS API", description="Text-to-Speech generation API", version="1.0.0"
 )
@@ -65,16 +94,32 @@ async def root():
     static_path = Path(__file__).parent / "static" / "index.html"
     content = static_path.read_text()
     # Replace the placeholder with the actual default text prompt
-    print(str(tts_model.origin))
-    content = content.replace(
-        "DEFAULT_TEXT_PROMPT", get_default_text_for_language(str(tts_model.origin))
-    )
+    origin = str(tts_model.origin) if tts_model is not None else None
+    content = content.replace("DEFAULT_TEXT_PROMPT", get_default_text_for_language(origin))
     return content
 
 
 @web_app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+@web_app.get("/voices")
+async def voices():
+    origin = str(tts_model.origin) if tts_model is not None else None
+    default_voice = get_default_voice_for_language(origin)
+    return {
+        "default_voice": default_voice,
+        "max_tokens_per_chunk": MAX_TOKEN_PER_CHUNK,
+        "hard_character_limit": None,
+        "character_limit_note": (
+            "No hard character limit is enforced; long text is split into tokenizer chunks."
+        ),
+        "voices": [
+            {"name": name, "language": BUILTIN_VOICE_LANGUAGES.get(name, "")}
+            for name in sorted(_ORIGINS_OF_PREDEFINED_VOICES)
+        ],
+    }
 
 
 def write_to_queue(queue, text_to_generate, model_state):
