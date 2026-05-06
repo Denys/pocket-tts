@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pocket TTS - Glass Studio</title>
+    <meta name="design-system" content="glassmorphism">
+    <link rel="icon" href="data:,">
+    <style>
+        @import url("https://fonts.googleapis.com/css2?family=Afacad+Flux:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap");
+
+        :root {
+            color-scheme: dark;
+            --ink: #071016;
+            --panel: rgba(255, 255, 255, 0.12);
+            --panel-strong: rgba(255, 255, 255, 0.18);
+            --line: rgba(255, 255, 255, 0.22);
+            --text: #f5fbff;
+            --muted: rgba(245, 251, 255, 0.68);
+            --faint: rgba(245, 251, 255, 0.48);
+            --teal: #7cf7dd;
+            --amber: #ffd166;
+            --rose: #ff7ca8;
+            --blue: #8eb9ff;
+            --danger: #ff9b9b;
+            --shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+            --radius: 28px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 8% 6%, rgba(124, 247, 221, 0.32), transparent 28rem),
+                radial-gradient(circle at 88% 12%, rgba(255, 124, 168, 0.24), transparent 26rem),
+                radial-gradient(circle at 60% 96%, rgba(255, 209, 102, 0.22), transparent 24rem),
+                linear-gradient(135deg, #061018 0%, #121922 45%, #05070c 100%);
+            color: var(--text);
+            font-family: "Afacad Flux", "Segoe UI", sans-serif;
+            letter-spacing: 0;
+        }
+
+        body::before {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            content: "";
+            opacity: 0.36;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+            background-size: 64px 64px;
+            mask-image: radial-gradient(circle at 50% 20%, black, transparent 74%);
+        }
+
+        button,
+        input,
+        select,
+        textarea {
+            font: inherit;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .shell {
+            width: min(1180px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 12px 0 16px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 10px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .brand-mark {
+            display: grid;
+            width: 44px;
+            height: 44px;
+            place-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 16px;
+            background:
+                linear-gradient(145deg, rgba(124, 247, 221, 0.38), rgba(255, 255, 255, 0.08)),
+                rgba(255, 255, 255, 0.09);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 18px 48px rgba(0, 0, 0, 0.28);
+        }
+
+        .brand-mark svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        h1,
+        h2,
+        h3,
+        p {
+            margin: 0;
+        }
+
+        .brand h1 {
+            font-family: "Fraunces", Georgia, serif;
+            font-size: clamp(1.35rem, 2.6vw, 2.1rem);
+            line-height: 0.95;
+        }
+
+        .brand p {
+            margin-top: 5px;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        .root-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 40px;
+            padding: 0 14px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 999px;
+            color: var(--text);
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(18px);
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            align-items: start;
+            height: calc(100vh - 82px);
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .layout-column {
+            display: grid;
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .glass-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background:
+                linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.07)),
+                var(--panel);
+            box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(28px) saturate(1.18);
+        }
+
+        .glass-card::after {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            content: "";
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 34%);
+            opacity: 0.58;
+        }
+
+        .card-body {
+            position: relative;
+            z-index: 1;
+            padding: 16px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 10px;
+        }
+
+        .section-title h2 {
+            font-family: "Fraunces", Georgia, serif;
+            font-size: 1.15rem;
+        }
+
+        .section-title span,
+        .hint,
+        .status,
+        .tiny {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        textarea,
+        input[type="text"],
+        select {
+            width: 100%;
+            min-height: 46px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 18px;
+            outline: none;
+            color: var(--text);
+            background: rgba(4, 10, 15, 0.38);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        textarea {
+            min-height: 180px;
+            padding: 15px;
+            resize: vertical;
+            line-height: 1.55;
+            font-size: 0.98rem;
+        }
+
+        input[type="text"],
+        select {
+            padding: 0 14px;
+        }
+
+        select option {
+            color: #111820;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            color: var(--muted);
+        }
+
+        .text-tools,
+        .inline-actions,
+        .chip-row,
+        .preferred-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .text-tools {
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+
+        .file-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 38px;
+            padding: 0 12px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .stack {
+            display: grid;
+            gap: 10px;
+            min-height: 0;
+        }
+
+        .field {
+            display: grid;
+            gap: 6px;
+        }
+
+        .voice-controls {
+            display: grid;
+            gap: 8px;
+        }
+
+        .action-status-row {
+            min-height: 22px;
+            gap: 14px;
+        }
+
+        .field label,
+        .mini-label {
+            color: rgba(245, 251, 255, 0.84);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .chip,
+        .preferred-voice {
+            display: inline-flex;
+            align-items: center;
+            min-height: 30px;
+            padding: 0 11px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 999px;
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+        .preferred-voice {
+            color: #071016;
+            background: linear-gradient(135deg, rgba(124, 247, 221, 0.96), rgba(142, 185, 255, 0.92));
+            border-color: rgba(255, 255, 255, 0.34);
+        }
+
+        .preferred-voice {
+            gap: 7px;
+            padding-right: 6px;
+        }
+
+        .preferred-remove {
+            display: grid;
+            width: 22px;
+            height: 22px;
+            place-items: center;
+            border: 0;
+            border-radius: 999px;
+            color: #071016;
+            background: rgba(255, 255, 255, 0.44);
+        }
+
+        .preferred-select {
+            padding: 0;
+            border: 0;
+            color: inherit;
+            background: transparent;
+            font: inherit;
+        }
+
+        .toggle-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 9px;
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .toggle-label input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--teal);
+        }
+
+        .empty {
+            color: var(--faint);
+            font-size: 0.9rem;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 40px;
+            padding: 0 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 18px;
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 16px 38px rgba(0, 0, 0, 0.24);
+            transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+        }
+
+        .button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.16);
+            border-color: rgba(255, 255, 255, 0.32);
+        }
+
+        .button.primary {
+            width: 100%;
+            min-height: 46px;
+            color: #071016;
+            background: linear-gradient(135deg, var(--teal), var(--amber));
+            border-color: rgba(255, 255, 255, 0.42);
+            font-weight: 700;
+            font-size: 1.03rem;
+        }
+
+        .button.ghost-active {
+            color: #071016;
+            background: linear-gradient(135deg, rgba(255, 209, 102, 0.98), rgba(255, 124, 168, 0.88));
+        }
+
+        .button.preview-accent {
+            color: #071016;
+            background: linear-gradient(135deg, rgba(142, 185, 255, 0.98), rgba(124, 247, 221, 0.84));
+            border-color: rgba(255, 255, 255, 0.38);
+        }
+
+        .button.preview-accent:hover:not(:disabled) {
+            background: linear-gradient(135deg, rgba(160, 199, 255, 1), rgba(142, 246, 223, 0.94));
+        }
+
+        .audio-panel {
+            display: none;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .audio-panel.visible {
+            display: grid;
+        }
+
+        audio {
+            width: 100%;
+            filter: drop-shadow(0 12px 32px rgba(0, 0, 0, 0.28));
+        }
+
+        .status {
+            min-height: 22px;
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--teal), var(--blue));
+            color: #071016;
+            padding: 0 14px;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .download-link.disabled {
+            pointer-events: none;
+            color: var(--faint);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .progress {
+            display: none;
+            gap: 6px;
+        }
+
+        .progress.visible {
+            display: grid;
+        }
+
+        .progress-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 0.86rem;
+        }
+
+        .progress-track {
+            height: 8px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: inherit;
+            background: linear-gradient(135deg, var(--teal), var(--amber));
+            transition: width 180ms ease;
+        }
+
+        .meter {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .meter-item {
+            padding: 9px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .meter-item strong {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.96rem;
+        }
+
+        @media (max-width: 860px) {
+            body {
+                overflow: auto;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+                height: auto;
+                overflow: visible;
+            }
+
+            .topbar {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .meter {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (min-width: 861px) {
+            .layout {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                align-items: stretch;
+            }
+
+            .layout-column {
+                grid-template-rows: minmax(0, 1fr) auto;
+            }
+
+            .layout-column > .glass-card {
+                overflow: auto;
+            }
+        }
+
+        @media (min-width: 861px) and (max-width: 1100px) {
+            .meter {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main id="glass-app" class="shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M5 14.5V9.5M9.5 18V6M14.5 16V8M19 13.5V10.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Pocket TTS Studio</h1>
+                    <p>Glassmorphism voice drafting surface for fast local synthesis.</p>
+                </div>
+            </div>
+            <a class="root-link" href="/">Classic app</a>
+        </header>
+
+        <div class="layout">
+            <section id="glass-script-column" class="layout-column" aria-label="Script and source">
+                <section id="glass-script-card" class="glass-card">
+                    <div class="card-body stack">
+                        <div class="section-title">
+                            <h2>Script</h2>
+                            <span id="glass-char-count">0 characters</span>
+                        </div>
+                        <textarea id="glass-text-input" rows="8">DEFAULT_TEXT_PROMPT</textarea>
+                        <div class="text-tools">
+                            <label class="file-label">
+                                Upload .txt
+                                <input id="glass-text-file-input" type="file" accept=".txt,text/plain">
+                            </label>
+                            <span class="hint">Long text is split into tokenizer chunks.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="glass-source-card" class="glass-card">
+                    <div class="card-body stack">
+                        <div class="section-title">
+                            <h2>Source</h2>
+                        </div>
+                        <div class="field">
+                            <label for="glass-voice-url-input">Advanced voice URL or name</label>
+                            <input id="glass-voice-url-input" type="text" placeholder="hf://kyutai/tts-voices/alba-mackenna/casual.wav">
+                        </div>
+                        <div class="field">
+                            <label for="glass-voice-wav-input">Voice clone reference</label>
+                            <input id="glass-voice-wav-input" type="file" accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*">
+                            <p class="hint">Uploaded audio takes precedence over built-in voice and URL override.</p>
+                        </div>
+                    </div>
+                </section>
+            </section>
+
+            <aside id="glass-voice-column" class="layout-column" aria-label="Voice and generation">
+                <section id="glass-voice-card" class="glass-card">
+                    <div class="card-body stack">
+                        <div class="section-title">
+                            <h2>Voice</h2>
+                            <span id="glass-voice-count">Loading</span>
+                        </div>
+
+                        <div class="field">
+                            <label for="glass-voice-select">Built-in voice</label>
+                            <select id="glass-voice-select"></select>
+                        </div>
+
+                        <div id="glass-voice-specs" class="chip-row" aria-label="Selected voice specs" aria-live="polite"></div>
+
+                        <div class="field voice-controls">
+                            <div id="glass-voice-actions" class="inline-actions">
+                                <button id="glass-preferred-toggle" class="button" type="button" aria-pressed="false">Add preferred</button>
+                                <button id="glass-preview-btn" class="button preview-accent" type="button">Preview voice</button>
+                            </div>
+                            <div class="inline-actions action-status-row">
+                                <span id="glass-preferred-status" class="status"></span>
+                                <span id="glass-preview-status" class="status"></span>
+                            </div>
+                            <div>
+                                <p class="mini-label">Preferred voices</p>
+                                <div id="glass-preferred-voices" class="preferred-row" aria-label="Preferred voices"></div>
+                            </div>
+                        </div>
+                        <div id="glass-preview-panel" class="audio-panel">
+                            <audio id="glass-preview-audio" controls></audio>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="glass-generate-card" class="glass-card">
+                    <div class="card-body stack">
+                        <label class="toggle-label">
+                            <input id="glass-silent-generate-input" type="checkbox">
+                            <span>Generate silently</span>
+                        </label>
+                        <button id="glass-generate-btn" class="button primary" type="button">Generate audio</button>
+                        <div id="glass-status" class="status" aria-live="polite"></div>
+                        <div id="glass-download-progress" class="progress">
+                            <div class="progress-row">
+                                <span id="glass-download-progress-text">Waiting for audio stream.</span>
+                                <span id="glass-download-progress-bytes">0 B</span>
+                            </div>
+                            <div class="progress-track">
+                                <div id="glass-download-progress-bar" class="progress-fill"></div>
+                            </div>
+                        </div>
+                        <div id="glass-audio-panel" class="audio-panel">
+                            <audio id="glass-audio" controls></audio>
+                            <a
+                                id="glass-download-link"
+                                class="download-link disabled"
+                                role="button"
+                                aria-disabled="true"
+                            >Download WAV</a>
+                        </div>
+                        <div class="meter">
+                            <div class="meter-item">
+                                <span class="tiny">Preview text</span>
+                                <strong id="glass-preview-meter">Ready</strong>
+                            </div>
+                            <div class="meter-item">
+                                <span class="tiny">Voice mode</span>
+                                <strong id="glass-mode-meter">Built-in</strong>
+                            </div>
+                            <div class="meter-item">
+                                <span class="tiny">Chunks</span>
+                                <strong id="glass-chunk-meter">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </main>
+
+    <script>
+        const PREFERRED_VOICES_STORAGE_KEY = 'pocket-tts-preferred-voices';
+        const API_BASE = window.location.origin;
+
+        let builtInVoices = [];
+        let preferredVoiceNames = [];
+        let previewText = '';
+        let currentAudioUrl = null;
+        let currentPreviewAudioUrl = null;
+        let preferredStatusTimer = null;
+
+        const textInput = document.getElementById('glass-text-input');
+        const textFileInput = document.getElementById('glass-text-file-input');
+        const charCount = document.getElementById('glass-char-count');
+        const voiceSelect = document.getElementById('glass-voice-select');
+        const voiceCount = document.getElementById('glass-voice-count');
+        const voiceSpecs = document.getElementById('glass-voice-specs');
+        const preferredToggle = document.getElementById('glass-preferred-toggle');
+        const preferredStatus = document.getElementById('glass-preferred-status');
+        const preferredVoices = document.getElementById('glass-preferred-voices');
+        const previewBtn = document.getElementById('glass-preview-btn');
+        const previewStatus = document.getElementById('glass-preview-status');
+        const previewPanel = document.getElementById('glass-preview-panel');
+        const previewAudio = document.getElementById('glass-preview-audio');
+        const voiceUrlInput = document.getElementById('glass-voice-url-input');
+        const voiceWavInput = document.getElementById('glass-voice-wav-input');
+        const silentGenerateInput = document.getElementById('glass-silent-generate-input');
+        const generateBtn = document.getElementById('glass-generate-btn');
+        const status = document.getElementById('glass-status');
+        const audioPanel = document.getElementById('glass-audio-panel');
+        const audio = document.getElementById('glass-audio');
+        const downloadLink = document.getElementById('glass-download-link');
+        const downloadProgress = document.getElementById('glass-download-progress');
+        const downloadProgressText = document.getElementById('glass-download-progress-text');
+        const downloadProgressBytes = document.getElementById('glass-download-progress-bytes');
+        const downloadProgressBar = document.getElementById('glass-download-progress-bar');
+        const previewMeter = document.getElementById('glass-preview-meter');
+        const modeMeter = document.getElementById('glass-mode-meter');
+        const chunkMeter = document.getElementById('glass-chunk-meter');
+
+        textInput.addEventListener('input', updateCharacterCount);
+        textFileInput.addEventListener('change', loadTextFile);
+        voiceSelect.addEventListener('change', renderVoiceState);
+        voiceUrlInput.addEventListener('input', renderVoiceState);
+        voiceWavInput.addEventListener('change', renderVoiceState);
+        preferredToggle.addEventListener('click', togglePreferredVoice);
+        previewBtn.addEventListener('click', previewVoice);
+        generateBtn.addEventListener('click', generateAudio);
+
+        function updateCharacterCount() {
+            const count = textInput.value.length;
+            charCount.textContent = `${count.toLocaleString()} character${count === 1 ? '' : 's'}`;
+        }
+
+        async function loadTextFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type && file.type !== 'text/plain') {
+                setStatus('Please upload a plain .txt file.', true);
+                event.target.value = '';
+                return;
+            }
+
+            textInput.value = await file.text();
+            updateCharacterCount();
+            setStatus(`Loaded ${file.name}.`);
+        }
+
+        function setStatus(message, isError = false) {
+            status.textContent = message;
+            status.classList.toggle('error', isError);
+        }
+
+        function setPreviewStatus(message, isError = false) {
+            previewStatus.textContent = message;
+            previewStatus.classList.toggle('error', isError);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function setDownloadReady(isReady, href = null) {
+            downloadLink.setAttribute('aria-disabled', isReady ? 'false' : 'true');
+            downloadLink.classList.toggle('disabled', !isReady);
+
+            if (isReady && href) {
+                downloadLink.href = href;
+                downloadLink.download = 'pocket-tts-glass.wav';
+            } else {
+                downloadLink.removeAttribute('href');
+                downloadLink.removeAttribute('download');
+            }
+        }
+
+        function updateDownloadProgress(receivedBytes, totalBytes = null, isComplete = false) {
+            downloadProgress.classList.add('visible');
+            downloadProgressBytes.textContent = totalBytes
+                ? `${formatBytes(receivedBytes)} / ${formatBytes(totalBytes)}`
+                : formatBytes(receivedBytes);
+
+            if (isComplete) {
+                downloadProgressText.textContent = 'Download ready.';
+                downloadProgressBar.style.width = '100%';
+                return;
+            }
+
+            downloadProgressText.textContent = 'Receiving audio stream...';
+            if (totalBytes) {
+                downloadProgressBar.style.width = `${Math.min(
+                    99,
+                    Math.round((receivedBytes / totalBytes) * 100)
+                )}%`;
+            } else {
+                downloadProgressBar.style.width = `${Math.min(
+                    95,
+                    8 + Math.round(receivedBytes / 8192)
+                )}%`;
+            }
+        }
+
+        function resetGeneratedAudioState() {
+            if (currentAudioUrl) {
+                URL.revokeObjectURL(currentAudioUrl);
+                currentAudioUrl = null;
+            }
+            audio.pause();
+            audio.removeAttribute('src');
+            audio.load();
+            setDownloadReady(false);
+            audioPanel.classList.add('visible');
+            updateDownloadProgress(0);
+            downloadProgressText.textContent = 'Waiting for audio stream.';
+            downloadProgressBar.style.width = '0%';
+        }
+
+        async function readResponseBlobWithProgress(response) {
+            const reader = response.body.getReader();
+            const contentLength = Number(response.headers.get('Content-Length')) || null;
+            const chunks = [];
+            let receivedBytes = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (!value) continue;
+
+                chunks.push(value);
+                receivedBytes += value.byteLength;
+                updateDownloadProgress(receivedBytes, contentLength);
+            }
+
+            updateDownloadProgress(receivedBytes, contentLength, true);
+            return new Blob(chunks, { type: response.headers.get('Content-Type') || 'audio/wav' });
+        }
+
+        function getPreviewTextFallback() {
+            const defaultText = (textInput.defaultValue || textInput.value).trim();
+            const sentenceMatch = defaultText.match(/^.*?[.!?](\s|$)/);
+            return sentenceMatch ? sentenceMatch[0].trim() : defaultText;
+        }
+
+        function loadPreferredVoiceNames() {
+            try {
+                const storedValue = localStorage.getItem(PREFERRED_VOICES_STORAGE_KEY);
+                const parsedValue = storedValue ? JSON.parse(storedValue) : [];
+                if (!Array.isArray(parsedValue)) return [];
+                return [...new Set(parsedValue.filter((name) => typeof name === 'string'))];
+            } catch {
+                return [];
+            }
+        }
+
+        function savePreferredVoiceNames() {
+            localStorage.setItem(PREFERRED_VOICES_STORAGE_KEY, JSON.stringify(preferredVoiceNames));
+        }
+
+        function findVoice(name) {
+            return builtInVoices.find((voice) => voice.name === name);
+        }
+
+        function isCustomVoice() {
+            return Boolean(voiceUrlInput.value.trim() || voiceWavInput.files[0]);
+        }
+
+        function appendSelectedVoice(formData) {
+            const voiceUrl = voiceUrlInput.value.trim();
+            const voiceWavFile = voiceWavInput.files[0];
+
+            if (voiceWavFile) {
+                formData.append('voice_wav', voiceWavFile);
+            } else if (voiceUrl) {
+                formData.append('voice_url', voiceUrl);
+            } else if (voiceSelect.value) {
+                formData.append('voice_url', voiceSelect.value);
+            }
+        }
+
+        function buildTtsFormData(text) {
+            const formData = new FormData();
+            formData.append('text', text);
+            appendSelectedVoice(formData);
+            return formData;
+        }
+
+        function chip(text, className = 'chip') {
+            const item = document.createElement('span');
+            item.className = className;
+            item.textContent = text;
+            return item;
+        }
+
+        function renderSpecs() {
+            voiceSpecs.replaceChildren();
+
+            if (isCustomVoice()) {
+                voiceSpecs.append(chip('Custom voice'), chip('Specs unavailable'));
+                return;
+            }
+
+            const voice = findVoice(voiceSelect.value);
+            if (!voice?.specs) return;
+            voiceSpecs.append(
+                chip(voice.specs.gender),
+                chip(voice.specs.intonation),
+                chip(voice.specs.pitch)
+            );
+        }
+
+        function showPreferredStatus(message) {
+            preferredStatus.textContent = message;
+            if (preferredStatusTimer) clearTimeout(preferredStatusTimer);
+            preferredStatusTimer = setTimeout(() => {
+                preferredStatus.textContent = '';
+            }, 2400);
+        }
+
+        function selectPreferredVoice(name) {
+            if (!findVoice(name)) return;
+            voiceUrlInput.value = '';
+            voiceWavInput.value = '';
+            voiceSelect.value = name;
+            renderVoiceState();
+        }
+
+        function removePreferredVoice(name) {
+            preferredVoiceNames = preferredVoiceNames.filter((item) => item !== name);
+            savePreferredVoiceNames();
+            showPreferredStatus(`Removed ${name}.`);
+            renderVoiceState();
+        }
+
+        function renderPreferredVoices() {
+            preferredVoices.replaceChildren();
+
+            const knownVoices = preferredVoiceNames.map(findVoice).filter(Boolean);
+            if (knownVoices.length === 0) {
+                const empty = document.createElement('span');
+                empty.className = 'empty';
+                empty.textContent = 'No preferred voices yet.';
+                preferredVoices.append(empty);
+                return;
+            }
+
+            for (const voice of knownVoices) {
+                const wrapper = document.createElement('span');
+                wrapper.className = 'preferred-voice';
+
+                const selectButton = document.createElement('button');
+                selectButton.type = 'button';
+                selectButton.className = 'preferred-select';
+                selectButton.textContent = voice.language
+                    ? `${voice.name} (${voice.language})`
+                    : voice.name;
+                selectButton.addEventListener('click', () => selectPreferredVoice(voice.name));
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'preferred-remove';
+                removeButton.textContent = 'x';
+                removeButton.setAttribute(
+                    'aria-label',
+                    `Remove ${voice.name} from preferred voices`
+                );
+                removeButton.addEventListener('click', () => removePreferredVoice(voice.name));
+
+                wrapper.append(selectButton, removeButton);
+                preferredVoices.append(wrapper);
+            }
+        }
+
+        function renderPreferredToggle() {
+            const selected = voiceSelect.value;
+            const isPreferred = preferredVoiceNames.includes(selected);
+            preferredToggle.disabled = !findVoice(selected) || isCustomVoice();
+            preferredToggle.textContent = isPreferred ? 'Remove preferred' : 'Add preferred';
+            preferredToggle.classList.toggle('ghost-active', isPreferred);
+            preferredToggle.setAttribute('aria-pressed', isPreferred ? 'true' : 'false');
+        }
+
+        function renderMeters() {
+            previewMeter.textContent = previewText || 'Ready';
+            modeMeter.textContent = voiceWavInput.files[0]
+                ? 'Upload'
+                : voiceUrlInput.value.trim()
+                  ? 'Override'
+                  : 'Built-in';
+        }
+
+        function renderVoiceState() {
+            renderSpecs();
+            renderPreferredVoices();
+            renderPreferredToggle();
+            renderMeters();
+        }
+
+        function togglePreferredVoice() {
+            const selected = voiceSelect.value;
+            if (!findVoice(selected)) return;
+
+            if (isCustomVoice()) {
+                showPreferredStatus('Clear custom voice first.');
+                return;
+            }
+
+            if (preferredVoiceNames.includes(selected)) {
+                preferredVoiceNames = preferredVoiceNames.filter((name) => name !== selected);
+                showPreferredStatus(`Removed ${selected}.`);
+            } else {
+                preferredVoiceNames = [...preferredVoiceNames, selected];
+                showPreferredStatus(`Added ${selected}.`);
+            }
+
+            savePreferredVoiceNames();
+            renderVoiceState();
+        }
+
+        async function loadVoices() {
+            const response = await fetch(`${API_BASE}/voices`);
+            if (!response.ok) {
+                setStatus(`Unable to load voices: ${response.status}`, true);
+                return;
+            }
+
+            const data = await response.json();
+            builtInVoices = data.voices || [];
+            preferredVoiceNames = loadPreferredVoiceNames().filter((name) => findVoice(name));
+            savePreferredVoiceNames();
+            previewText = data.preview_text || getPreviewTextFallback();
+            chunkMeter.textContent = String(data.max_tokens_per_chunk || '-');
+
+            voiceSelect.replaceChildren();
+            for (const voice of builtInVoices) {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
+                if (voice.name === data.default_voice) option.selected = true;
+                voiceSelect.append(option);
+            }
+
+            voiceCount.textContent = `${builtInVoices.length} voices`;
+            renderVoiceState();
+        }
+
+        async function fetchSpeech(text, target) {
+            const response = await fetch(`${API_BASE}/tts`, {
+                method: 'POST',
+                body: buildTtsFormData(text)
+            });
+
+            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+            const blob = target === 'audio'
+                ? await readResponseBlobWithProgress(response)
+                : await response.blob();
+            const url = URL.createObjectURL(blob);
+
+            if (target === 'preview') {
+                if (currentPreviewAudioUrl) URL.revokeObjectURL(currentPreviewAudioUrl);
+                currentPreviewAudioUrl = url;
+                previewAudio.src = url;
+                previewPanel.classList.add('visible');
+            } else {
+                currentAudioUrl = url;
+                audio.src = url;
+                setDownloadReady(true, url);
+                audioPanel.classList.add('visible');
+            }
+
+            return url;
+        }
+
+        async function previewVoice() {
+            const text = (previewText || getPreviewTextFallback()).trim();
+            if (!text) {
+                setPreviewStatus('Preview text unavailable.', true);
+                return;
+            }
+
+            previewBtn.disabled = true;
+            generateBtn.disabled = true;
+            previewAudio.pause();
+            setPreviewStatus(`Rendering: ${text}`);
+
+            try {
+                await fetchSpeech(text, 'preview');
+                try {
+                    await previewAudio.play();
+                    setPreviewStatus('Playing preview.');
+                } catch {
+                    setPreviewStatus('Preview ready. Press play.');
+                }
+            } catch (error) {
+                setPreviewStatus(error.message, true);
+            } finally {
+                previewBtn.disabled = false;
+                generateBtn.disabled = false;
+            }
+        }
+
+        async function generateAudio() {
+            const text = textInput.value.trim();
+            if (!text) {
+                setStatus('Enter text before generating.', true);
+                return;
+            }
+
+            generateBtn.disabled = true;
+            previewBtn.disabled = true;
+            const shouldPlayAfterRender = !silentGenerateInput.checked;
+            resetGeneratedAudioState();
+            setStatus(shouldPlayAfterRender ? 'Rendering speech.' : 'Rendering silently.');
+
+            const startTime = performance.now();
+            try {
+                await fetchSpeech(text, 'audio');
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+                if (shouldPlayAfterRender) {
+                    try {
+                        await audio.play();
+                        setStatus(`Audio ready in ${elapsed}s. Playing now.`);
+                    } catch {
+                        setStatus(`Audio ready in ${elapsed}s. Press play to listen.`);
+                    }
+                } else {
+                    setStatus(`Silent render ready in ${elapsed}s. Press play to listen.`);
+                }
+            } catch (error) {
+                setStatus(error.message, true);
+            } finally {
+                generateBtn.disabled = false;
+                previewBtn.disabled = false;
+            }
+        }
+
+        window.addEventListener('load', () => {
+            updateCharacterCount();
+            previewText = getPreviewTextFallback();
+            loadVoices();
+        });
+    </script>
+</body>
+</html>

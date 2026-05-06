@@ -26,6 +26,7 @@ from pocket_tts.default_parameters import (
     get_default_voice_for_language,
     get_preview_text_for_language,
 )
+from pocket_tts.desktop_app import DesktopAppOptions, run_desktop_app
 from pocket_tts.models.tts_model import TTSModel, export_model_state
 from pocket_tts.utils.logging_utils import enable_logging
 from pocket_tts.utils.utils import _ORIGINS_OF_PREDEFINED_VOICES
@@ -126,12 +127,20 @@ web_app.add_middleware(
 @web_app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the frontend."""
-    static_path = Path(__file__).parent / "static" / "index.html"
+    return _read_static_page("index.html")
+
+
+@web_app.get("/glass", response_class=HTMLResponse)
+async def glass():
+    """Serve the alternate glassmorphism frontend."""
+    return _read_static_page("glass.html")
+
+
+def _read_static_page(filename: str) -> str:
+    static_path = Path(__file__).parent / "static" / filename
     content = static_path.read_text()
-    # Replace the placeholder with the actual default text prompt
     origin = str(tts_model.origin) if tts_model is not None else None
-    content = content.replace("DEFAULT_TEXT_PROMPT", get_default_text_for_language(origin))
-    return content
+    return content.replace("DEFAULT_TEXT_PROMPT", get_default_text_for_language(origin))
 
 
 @web_app.get("/health")
@@ -297,6 +306,48 @@ def serve(
     tts_model = TTSModel.load_model(language=language, config=config, quantize=quantize)
 
     uvicorn.run("pocket_tts.main:web_app", host=host, port=port, reload=reload)
+
+
+@cli_app.command("app")
+def desktop_app(
+    host: Annotated[str, typer.Option(help="Host to bind to")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port to bind to")] = 8000,
+    language: Annotated[
+        str | None,
+        typer.Option(
+            help="Language for the TTS model. Same values as in the `serve` command.",
+            show_default=False,
+        ),
+    ] = None,
+    config: Annotated[
+        str | None,
+        typer.Option(
+            help="Path to locally-saved model config .yaml file. Incompatible with language."
+        ),
+    ] = None,
+    quantize: Annotated[
+        bool, typer.Option(help="Apply int8 quantization to reduce memory usage")
+    ] = False,
+    startup_timeout: Annotated[
+        float, typer.Option(help="Seconds to wait for the local server to become ready")
+    ] = 120.0,
+):
+    """Start Pocket TTS as a standalone desktop app."""
+
+    try:
+        run_desktop_app(
+            DesktopAppOptions(
+                host=host,
+                port=port,
+                language=language,
+                config=config,
+                quantize=quantize,
+                startup_timeout=startup_timeout,
+            )
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
 
 
 # ------------------------------------------------------

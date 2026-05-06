@@ -26,6 +26,8 @@ dependencies = [
 [project.optional-dependencies]
 audio = ["soundfile>=0.12.0"]
 quantize = ["torchao>=0.16.0"]
+desktop = ["pywebview>=6.2.1,<7"]
+build-windows = ["pillow>=10.0.0", "pyinstaller>=6.0.0"]
 
 
 [dependency-groups]
@@ -70,6 +72,9 @@ packages = ["pocket_tts"]
 
 [project.scripts]
 pocket-tts = "pocket_tts.main:cli_app"
+
+[project.gui-scripts]
+pocket-tts-desktop = "pocket_tts.windows_app:main"
 
 [tool.uv]
 # System python distribution can have header files missing, so we use only the python

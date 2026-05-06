@@ -100,6 +100,35 @@ Navigate to `http://localhost:8000` to try the web interface, it's faster than t
 
 You can check out the [serve documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/serve/) for more details and examples.
 
+### The `app` command (desktop window)
+
+If you want a desktop app experience, install the desktop extra and use the `app` command.
+It starts the local server and hosts the web interface in an embedded desktop window, without opening your default browser:
+
+```bash
+uvx --from "pocket-tts[desktop]" pocket-tts app
+# or if you installed it manually with pip:
+pip install "pocket-tts[desktop]"
+pocket-tts app
+# or from this source checkout:
+uv run --extra desktop pocket-tts app
+```
+
+This repository also includes launcher wrappers you can double-click after installing Pocket TTS locally:
+
+- `Pocket-TTS.command` (macOS/Linux terminals that support `.command`)
+- `Pocket-TTS.bat` (Windows)
+
+They run `pocket-tts app` from `.venv` when available, or `uvx --from "pocket-tts[desktop]" pocket-tts app`.
+
+To build a standalone Windows executable with an app icon:
+
+```powershell
+.\scripts\build_windows_app.ps1
+```
+
+The packaged executable is written under `dist/windows/`.
+
 ### The `export-voice` command
 
 Processing an audio file (e.g., a .wav or .mp3) for voice cloning is relatively slow, but loading a safetensors file -- a voice embedding converted from an audio file -- is very fast. You can use the `export-voice` command to do this conversion. See the [export-voice documentation](https://kyutai-labs.github.io/pocket-tts/CLI%20Commands/export_voice/) for more details and examples.

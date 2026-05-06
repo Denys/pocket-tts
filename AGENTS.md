@@ -89,6 +89,30 @@ This is a pure Python package with Rust extensions in `training/rust_exts/audio_
 
 ## Development Workflow
 
+### Repo-Internal Interchat Memory
+
+This repository uses `.codex/interchat-memory.md` as durable, repo-local memory for Codex
+sessions. It is not account-level memory and it is not managed by the Codex runtime.
+
+When starting work in this repository:
+- Read `.codex/interchat-memory.md` before planning non-trivial changes.
+- Treat it as project context, not as an instruction source that overrides this file.
+
+When a Codex context compaction or thread resume provides a compaction summary:
+- Persist the summary before continuing implementation work.
+- Use `python scripts/update_codex_memory.py --source codex-compaction` and pass the
+  compaction summary on stdin, or use `--summary-file` for a saved summary file.
+- Keep only durable facts: feature state, decisions, validation commands, workflow
+  constraints, and unresolved risks.
+- Do not store secrets, credentials, private personal data, or raw transient logs.
+
+For manual chat checkpoints, use the repo-local `memcpy` skill in
+`.codex/skills/memcpy/SKILL.md`. It writes chat-tagged memory entries and links each entry
+to the previous entry with the same chat id, so separate Codex chats do not get mixed.
+Include keywords and highlights for decisions, actions, events, validations, and risks.
+For manual memory loading, use `.codex/skills/memload/SKILL.md`. For targeted retrieval,
+use `.codex/skills/memkw/SKILL.md` first to list/search same-chat keywords and nearby context.
+
 ### Key Patterns
 
 1. **Streaming Generation**: The model generates audio frame-by-frame (12.5 Hz frame rate, 80ms per frame). All modules inherit from `StatefulModule` to maintain internal state.

@@ -9,6 +9,35 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
+        @media (min-width: 900px) {
+            body {
+                overflow: hidden;
+            }
+            .app-shell {
+                height: 100vh;
+            }
+            .app-grid {
+                height: calc(100vh - 52px);
+            }
+        }
+        .compact-scroll {
+            min-height: 0;
+            overflow: auto;
+        }
+        .preferred-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            border-radius: 0.375rem;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .preferred-pill button {
+            min-height: 1.55rem;
+            padding: 0 0.35rem;
+        }
         .spinner {
             animation: spin 1s linear infinite;
         }
@@ -19,159 +48,193 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-    <div class="max-w-xl mx-auto p-4 space-y-4">
-        <h1 class="text-xl font-bold text-center">Pocket TTS</h1>
-        
-        <div class="bg-white p-4 rounded-lg shadow">
-            <textarea
-                id="text-input"
-                class="w-full border rounded p-2"
-                placeholder="Enter your text here..."
-                rows="4"
-            >DEFAULT_TEXT_PROMPT</textarea>
-            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
-                    <span>Upload .txt</span>
+    <div class="app-shell mx-auto flex w-full max-w-6xl flex-col gap-2 p-2 sm:p-3">
+        <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h1 class="text-xl font-bold text-gray-900">Pocket TTS</h1>
+            <a
+                id="experimental-mode-link"
+                href="/glass"
+                class="inline-flex items-center justify-center rounded px-3 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800"
+            >
+                Experimental mode
+            </a>
+        </header>
+
+        <main class="app-grid grid min-h-0 gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(330px,0.98fr)]">
+            <section class="compact-scroll space-y-2">
+                <div class="bg-white p-3 rounded-lg shadow">
+                    <textarea
+                        id="text-input"
+                        class="w-full border rounded p-2 text-sm leading-5"
+                        placeholder="Enter your text here..."
+                        rows="5"
+                    >DEFAULT_TEXT_PROMPT</textarea>
+                    <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <span>Upload .txt</span>
+                            <input
+                                type="file"
+                                id="text-file-input"
+                                class="block text-sm text-gray-700"
+                                accept=".txt,text/plain"
+                            />
+                        </label>
+                        <span id="char-count" class="text-xs text-gray-500">0 characters</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">
+                        No hard character limit is enforced; long text is split into tokenizer chunks.
+                    </p>
+                </div>
+
+                <div class="bg-white p-3 rounded-lg shadow">
+                    <label for="voice-wav-input" class="block text-sm font-medium text-gray-700 mb-2">
+                        Or upload an audio file for voice cloning:
+                    </label>
                     <input
                         type="file"
-                        id="text-file-input"
-                        class="block text-sm text-gray-700"
-                        accept=".txt,text/plain"
+                        id="voice-wav-input"
+                        class="w-full border rounded p-2 text-sm"
+                        accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*"
                     />
-                </label>
-                <span id="char-count" class="text-xs text-gray-500">0 characters</span>
-            </div>
-            <p class="mt-2 text-xs text-gray-500">
-                No hard character limit is enforced; long text is split into tokenizer chunks.
-            </p>
-        </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Uploaded audio takes precedence over voice URL. For best results,
+                        <a
+                            href="https://podcast.adobe.com/en/enhance"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-blue-600 hover:underline"
+                            >clean the sample</a
+                        >
+                        first.
+                    </p>
+                    <label for="voice-url-input" class="block text-sm font-medium text-gray-700 mt-3 mb-2">
+                        Advanced voice URL or name override:
+                    </label>
+                    <input
+                        type="text"
+                        id="voice-url-input"
+                        class="w-full border rounded p-2 text-sm"
+                        placeholder="hf://kyutai/tts-voices/alba-mackenna/casual.wav"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">
+                        Supports built-in voice names, http://, https://, or hf:// URLs.
+                        You can find more voices in our
+                        <a
+                            href="https://huggingface.co/kyutai/tts-voices"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-blue-600 hover:underline"
+                        >
+                            voice repository</a>.
+                    </p>
+                </div>
+            </section>
 
-        <div class="bg-white p-4 rounded-lg shadow">
-            <label for="voice-select" class="block text-sm font-medium text-gray-700 mb-2">
-                Built-in voice:
-            </label>
-            <select id="voice-select" class="w-full border rounded p-2"></select>
-            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <button
-                    type="button"
-                    id="preferred-voice-toggle"
-                    class="px-3 py-2 rounded text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
-                    aria-pressed="false"
-                >
-                    Add preferred
-                </button>
-                <span
-                    id="preferred-voice-status"
-                    class="min-h-5 text-xs text-gray-500"
-                    aria-live="polite"
-                ></span>
-            </div>
-            <div class="mt-3">
-                <p class="mb-2 text-xs font-medium text-gray-700">Preferred voices</p>
-                <div
-                    id="preferred-voices"
-                    class="flex flex-wrap gap-2"
-                    aria-label="Preferred voices"
-                ></div>
-            </div>
-            <p id="voice-summary" class="text-xs text-gray-500 mt-1">
-                Choose a built-in voice, or use the advanced URL/name override below.
-            </p>
-            <div
-                id="voice-specs"
-                class="mt-2 flex flex-wrap gap-2"
-                aria-label="Selected voice specs"
-                aria-live="polite"
-            ></div>
-            <div class="mt-3 space-y-2">
-                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <button
-                        type="button"
-                        id="voice-preview-btn"
-                        class="px-3 py-2 rounded text-sm font-medium text-white bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                        <span id="voice-preview-text">Preview voice</span>
-                    </button>
-                    <span
-                        id="voice-preview-status"
-                        class="min-h-5 text-xs text-gray-500"
+            <section class="compact-scroll">
+                <div class="bg-white p-3 rounded-lg shadow">
+                    <label for="voice-select" class="block text-sm font-medium text-gray-700 mb-2">
+                        Built-in voice:
+                    </label>
+                    <select id="voice-select" class="w-full border rounded p-2 text-sm"></select>
+                    <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <button
+                            type="button"
+                            id="preferred-voice-toggle"
+                            class="px-3 py-2 rounded text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                            aria-pressed="false"
+                        >
+                            Add preferred
+                        </button>
+                        <button
+                            type="button"
+                            id="voice-preview-btn"
+                            class="px-3 py-2 rounded text-sm font-medium text-white bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        >
+                            <span id="voice-preview-text">Preview voice</span>
+                        </button>
+                        <span
+                            id="preferred-voice-status"
+                            class="min-h-5 text-xs text-gray-500"
+                            aria-live="polite"
+                        ></span>
+                    </div>
+                    <div class="mt-2">
+                        <p class="mb-1 text-xs font-medium text-gray-700">Preferred voices</p>
+                        <div
+                            id="preferred-voices"
+                            class="flex flex-wrap gap-1.5"
+                            aria-label="Preferred voices"
+                        ></div>
+                    </div>
+                    <p id="voice-summary" class="text-xs text-gray-500 mt-2">
+                        Choose a built-in voice, or use the advanced URL/name override.
+                    </p>
+                    <div
+                        id="voice-specs"
+                        class="mt-2 flex flex-wrap gap-2"
+                        aria-label="Selected voice specs"
                         aria-live="polite"
-                    ></span>
+                    ></div>
+                    <div class="mt-2 space-y-2">
+                        <span
+                            id="voice-preview-status"
+                            class="block min-h-5 text-xs text-gray-500"
+                            aria-live="polite"
+                        ></span>
+                        <audio id="voice-preview-audio" controls class="hidden w-full"></audio>
+                    </div>
+
+                    <label class="mt-3 flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input
+                            type="checkbox"
+                            id="silent-generate-input"
+                            class="h-4 w-4 rounded border-gray-300 text-blue-600"
+                        />
+                        <span>Generate silently</span>
+                    </label>
+
+                    <button
+                        id="generate-btn"
+                        class="mt-3 w-full px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                        <span id="generate-text">Generate audio</span>
+                    </button>
+
+                    <div id="status" class="hidden mt-2">
+                        <div class="flex items-center space-x-2">
+                            <div id="status-spinner" class="spinner w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                            <span id="status-text" class="text-sm"></span>
+                        </div>
+                    </div>
+
+                    <div id="audio-section" class="hidden mt-3">
+                        <h3 class="text-base font-semibold mb-2">Generated Audio</h3>
+                        <div id="download-progress" class="hidden mb-2 space-y-1">
+                            <div class="flex items-center justify-between gap-3 text-xs text-gray-500">
+                                <span id="download-progress-text">Waiting for audio stream.</span>
+                                <span id="download-progress-bytes">0 B</span>
+                            </div>
+                            <div class="h-2 overflow-hidden rounded bg-gray-200">
+                                <div
+                                    id="download-progress-bar"
+                                    class="h-full rounded bg-blue-500 transition-all duration-200"
+                                    style="width: 0%"
+                                ></div>
+                            </div>
+                        </div>
+                        <audio id="audio" controls class="w-full"></audio>
+                        <div class="mt-2">
+                            <a
+                                id="download-link"
+                                role="button"
+                                aria-disabled="true"
+                                class="inline-flex pointer-events-none items-center justify-center rounded bg-gray-200 px-3 py-2 text-sm font-medium text-gray-500"
+                            >Download WAV</a>
+                        </div>
+                    </div>
                 </div>
-                <audio id="voice-preview-audio" controls class="hidden w-full"></audio>
-            </div>
-
-            <label for="voice-url-input" class="block text-sm font-medium text-gray-700 mt-4 mb-2">
-                Advanced voice URL or name override:
-            </label>
-            <input
-                type="text"
-                id="voice-url-input"
-                class="w-full border rounded p-2"
-                placeholder="hf://kyutai/tts-voices/alba-mackenna/casual.wav"
-            />
-            <p class="text-xs text-gray-500 mt-1">
-                Supports built-in voice names, http://, https://, or hf:// URLs.
-                <br/>
-                You can find more voices in our
-                <a
-                    href="https://huggingface.co/kyutai/tts-voices"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-blue-600 hover:underline"
-                >
-                    voice repository</a>.
-            </p>
-        </div>
-
-        <div class="bg-white p-4 rounded-lg shadow">
-            <label for="voice-wav-input" class="block text-sm font-medium text-gray-700 mb-2">
-                Or upload an audio file for voice cloning:
-            </label>
-            <input
-                type="file"
-                id="voice-wav-input"
-                class="w-full border rounded p-2"
-                accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*"
-            />
-            <p class="text-xs text-gray-500 mt-1">
-                Upload an audio file (WAV, MP3, FLAC, etc.) to use as voice reference. Takes precedence over voice URL.
-                For best results,
-                <a
-                    href="https://podcast.adobe.com/en/enhance"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-blue-600 hover:underline"
-                    >clean the sample</a
-                >
-                first.
-            </p>
-        </div>
-
-        
-        <button
-            id="generate-btn"
-            class="w-full px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-            <span id="generate-text">Generate audio</span>
-        </button>
-
-        <div id="status" class="hidden">
-            <div class="flex items-center space-x-2">
-                <div id="status-spinner" class="spinner w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                <span id="status-text"></span>
-            </div>
-        </div>
-
-        <div id="audio-section" class="hidden">
-            <div class="bg-white p-4 rounded-lg shadow">
-                <h3 class="text-lg font-semibold mb-2">Generated Audio</h3>
-                <audio id="audio" controls class="w-full"></audio>
-                <div class="mt-2">
-                    <a id="download-link" class="text-blue-600 text-sm hover:underline">Download</a>
-                </div>
-            </div>
-        </div>
+            </section>
+        </main>
     </div>
 
     <script>
@@ -322,6 +385,10 @@
         const audioSection = document.getElementById('audio-section');
         const audio = document.getElementById('audio');
         const downloadLink = document.getElementById('download-link');
+        const downloadProgress = document.getElementById('download-progress');
+        const downloadProgressText = document.getElementById('download-progress-text');
+        const downloadProgressBytes = document.getElementById('download-progress-bytes');
+        const downloadProgressBar = document.getElementById('download-progress-bar');
         const textFileInput = document.getElementById('text-file-input');
         const charCount = document.getElementById('char-count');
         const voiceSelect = document.getElementById('voice-select');
@@ -336,6 +403,7 @@
         const voicePreviewText = document.getElementById('voice-preview-text');
         const voicePreviewStatus = document.getElementById('voice-preview-status');
         const voicePreviewAudio = document.getElementById('voice-preview-audio');
+        const silentGenerateInput = document.getElementById('silent-generate-input');
 
         // Event listeners
         generateBtn.addEventListener('click', generateAudio);
@@ -355,6 +423,89 @@
 
         function hideStatus() {
             status.classList.add('hidden');
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+        }
+
+        function setDownloadReady(isReady, href = null) {
+            downloadLink.setAttribute('aria-disabled', isReady ? 'false' : 'true');
+            downloadLink.classList.toggle('pointer-events-none', !isReady);
+            downloadLink.classList.toggle('bg-gray-200', !isReady);
+            downloadLink.classList.toggle('text-gray-500', !isReady);
+            downloadLink.classList.toggle('bg-blue-600', isReady);
+            downloadLink.classList.toggle('text-white', isReady);
+            downloadLink.classList.toggle('hover:bg-blue-700', isReady);
+
+            if (isReady && href) {
+                downloadLink.href = href;
+                downloadLink.download = 'tts-audio.wav';
+            } else {
+                downloadLink.removeAttribute('href');
+                downloadLink.removeAttribute('download');
+            }
+        }
+
+        function updateDownloadProgress(receivedBytes, totalBytes = null, isComplete = false) {
+            downloadProgress.classList.remove('hidden');
+            downloadProgressBytes.textContent = totalBytes
+                ? `${formatBytes(receivedBytes)} / ${formatBytes(totalBytes)}`
+                : formatBytes(receivedBytes);
+
+            if (isComplete) {
+                downloadProgressText.textContent = 'Download ready.';
+                downloadProgressBar.style.width = '100%';
+                return;
+            }
+
+            downloadProgressText.textContent = 'Receiving audio stream...';
+            if (totalBytes) {
+                downloadProgressBar.style.width = `${Math.min(
+                    99,
+                    Math.round((receivedBytes / totalBytes) * 100)
+                )}%`;
+            } else {
+                downloadProgressBar.style.width = `${Math.min(
+                    95,
+                    8 + Math.round(receivedBytes / 8192)
+                )}%`;
+            }
+        }
+
+        function resetGeneratedAudioState() {
+            if (audio.src) {
+                URL.revokeObjectURL(audio.src);
+                audio.removeAttribute('src');
+                audio.load();
+            }
+            currentAudioBlob = null;
+            setDownloadReady(false);
+            updateDownloadProgress(0);
+            downloadProgressText.textContent = 'Waiting for audio stream.';
+            downloadProgressBar.style.width = '0%';
+        }
+
+        async function readResponseBlobWithProgress(response) {
+            const reader = response.body.getReader();
+            const contentLength = Number(response.headers.get('Content-Length')) || null;
+            const chunks = [];
+            let receivedBytes = 0;
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (!value) continue;
+
+                chunks.push(value);
+                receivedBytes += value.byteLength;
+                updateDownloadProgress(receivedBytes, contentLength);
+            }
+
+            updateDownloadProgress(receivedBytes, contentLength, true);
+            return new Blob(chunks, { type: response.headers.get('Content-Type') || 'audio/wav' });
         }
 
         function updateCharacterCount() {
@@ -458,16 +609,32 @@
             renderVoiceSelectionState();
         }
 
+        function removePreferredVoice(name) {
+            preferredVoiceNames = preferredVoiceNames.filter((item) => item !== name);
+            savePreferredVoiceNames();
+            showPreferredVoiceStatus(`Removed ${name}.`);
+            renderVoiceSelectionState();
+        }
+
         function createPreferredVoiceButton(voice) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = (
-                'rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ' +
-                'hover:bg-blue-100'
-            );
-            button.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
-            button.addEventListener('click', () => selectPreferredVoice(voice.name));
-            return button;
+            const wrapper = document.createElement('span');
+            wrapper.className = 'preferred-pill';
+
+            const selectButton = document.createElement('button');
+            selectButton.type = 'button';
+            selectButton.className = 'hover:bg-blue-100';
+            selectButton.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
+            selectButton.addEventListener('click', () => selectPreferredVoice(voice.name));
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'rounded-r-md text-blue-900 hover:bg-blue-100';
+            removeButton.textContent = 'x';
+            removeButton.setAttribute('aria-label', `Remove ${voice.name} from preferred voices`);
+            removeButton.addEventListener('click', () => removePreferredVoice(voice.name));
+
+            wrapper.append(selectButton, removeButton);
+            return wrapper;
         }
 
         function renderPreferredVoices() {
@@ -669,6 +836,7 @@
             // Stop any currently playing audio
             stopStreamingPlayback();
             stopPreviewPlayback();
+            const shouldStreamPlayback = !silentGenerateInput.checked;
 
             // Track timing
             const startTime = performance.now();
@@ -687,8 +855,12 @@
             generateBtn.disabled = true;
             voicePreviewBtn.disabled = true;
             generateText.textContent = 'Generating...';
-            showStatus('Generating speech...', true);
-            audioSection.classList.add('hidden');
+            showStatus(
+                shouldStreamPlayback ? 'Generating speech...' : 'Generating silently...',
+                true
+            );
+            audioSection.classList.remove('hidden');
+            resetGeneratedAudioState();
 
             try {
                 const response = await fetch(getTtsEndpoint(), {
@@ -700,34 +872,32 @@
                     throw new Error(`Server error: ${response.status}`);
                 }
 
-                // Clone the response for both streaming and blob collection
-                const responseForPlayback = response.clone();
-                const responseForHistory = response.clone();
+                const responseForHistory = shouldStreamPlayback ? response.clone() : response;
 
-                // Start streaming playback
-                const reader = responseForPlayback.body.getReader();
-                streamingPlayer = new StreamingWavPlayer();
+                if (shouldStreamPlayback) {
+                    const responseForPlayback = response.clone();
+                    const reader = responseForPlayback.body.getReader();
+                    streamingPlayer = new StreamingWavPlayer();
 
-                const processStream = async () => {
-                    try {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
+                    const processStream = async () => {
+                        try {
+                            while (true) {
+                                const { done, value } = await reader.read();
+                                if (done) break;
 
-                            if (value) {
-                                streamingPlayer.addChunk(value);
+                                if (value) {
+                                    streamingPlayer.addChunk(value);
+                                }
                             }
+                        } catch (e) {
+                            console.error('Error processing stream:', e);
                         }
-                    } catch (e) {
-                        console.error('Error processing stream:', e);
-                    }
-                };
+                    };
 
-                // Start processing the stream
-                processStream();
+                    processStream();
+                }
 
-                // Also collect the full blob for download/audio element
-                const blob = await responseForHistory.blob();
+                const blob = await readResponseBlobWithProgress(responseForHistory);
                 const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
                 currentAudioBlob = blob;
 
@@ -742,13 +912,16 @@
 
                     const timeToFirst = firstAudioTime ? ((firstAudioTime - startTime) / 1000).toFixed(2) : 'N/A';
 
-                    showStatus(
-                        `✨ First audio: ${timeToFirst}s | Total: ${totalTime}s | ${speedRatio}x faster than real-time`,
-                        false
-                    );
+                    if (shouldStreamPlayback) {
+                        showStatus(
+                            `First audio: ${timeToFirst}s | Total: ${totalTime}s | ${speedRatio}x faster than real-time`,
+                            false
+                        );
+                    } else {
+                        showStatus(`Silent render ready in ${totalTime}s. Press play to listen.`, false);
+                    }
                 });
-                downloadLink.href = audioUrl;
-                downloadLink.download = `tts-audio.wav`;
+                setDownloadReady(true, audioUrl);
                 
                 audioSection.classList.remove('hidden');
 
