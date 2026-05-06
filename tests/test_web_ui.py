@@ -24,8 +24,44 @@ class WebUiTests(unittest.TestCase):
             data["character_limit_note"],
             "No hard character limit is enforced; long text is split into tokenizer chunks.",
         )
-        self.assertIn({"name": "alba", "language": "en"}, data["voices"])
-        self.assertIn({"name": "giovanni", "language": "it"}, data["voices"])
+        self.assertEqual(data["preview_text"], "Hello world.")
+        self.assertIn(
+            {
+                "name": "alba",
+                "language": "en",
+                "specs": {
+                    "gender": "Female",
+                    "intonation": "Casual",
+                    "pitch": "Middle pitch",
+                },
+            },
+            data["voices"],
+        )
+        self.assertIn(
+            {
+                "name": "giovanni",
+                "language": "it",
+                "specs": {
+                    "gender": "Male",
+                    "intonation": "Neutral",
+                    "pitch": "Lower pitch",
+                },
+            },
+            data["voices"],
+        )
+
+    def test_voices_endpoint_returns_language_specific_preview_text(self):
+        previous_model = main.tts_model
+        main.tts_model = types.SimpleNamespace(origin="french_24l")
+        try:
+            client = TestClient(web_app)
+
+            response = client.get("/voices")
+        finally:
+            main.tts_model = previous_model
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["preview_text"], "Bonjour le monde.")
 
     def test_root_page_contains_voice_dropdown_and_text_upload_controls(self):
         previous_model = main.tts_model
@@ -39,8 +75,18 @@ class WebUiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="voice-select"', response.text)
+        self.assertIn('id="preferred-voices"', response.text)
+        self.assertIn('id="preferred-voice-toggle"', response.text)
+        self.assertIn('id="voice-specs"', response.text)
+        self.assertIn('id="voice-preview-btn"', response.text)
+        self.assertIn('id="voice-preview-audio"', response.text)
         self.assertIn('id="text-file-input"', response.text)
         self.assertIn('id="char-count"', response.text)
+        self.assertIn("pocket-tts-preferred-voices", response.text)
+        self.assertIn("togglePreferredVoice", response.text)
+        self.assertIn("renderPreferredVoices", response.text)
+        self.assertIn("renderVoiceSpecs", response.text)
+        self.assertIn("previewVoice", response.text)
         self.assertIn("No hard character limit", response.text)
 
 

@@ -24,6 +24,7 @@ from pocket_tts.default_parameters import (
     MAX_TOKEN_PER_CHUNK,
     get_default_text_for_language,
     get_default_voice_for_language,
+    get_preview_text_for_language,
 )
 from pocket_tts.models.tts_model import TTSModel, export_model_state
 from pocket_tts.utils.logging_utils import enable_logging
@@ -72,6 +73,40 @@ BUILTIN_VOICE_LANGUAGES = {
     "estelle": "fr",
 }
 
+BUILTIN_VOICE_SPECS = {
+    "alba": {"gender": "Female", "intonation": "Casual", "pitch": "Middle pitch"},
+    "anna": {"gender": "Female", "intonation": "Neutral", "pitch": "Higher pitch"},
+    "azelma": {"gender": "Female", "intonation": "Neutral", "pitch": "Middle pitch"},
+    "bill_boerst": {"gender": "Male", "intonation": "Narrative", "pitch": "Lower pitch"},
+    "caro_davy": {"gender": "Female", "intonation": "Narrative", "pitch": "Middle pitch"},
+    "charles": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "cosette": {"gender": "Female", "intonation": "Confused", "pitch": "Middle pitch"},
+    "eponine": {"gender": "Female", "intonation": "Neutral", "pitch": "Middle pitch"},
+    "estelle": {"gender": "Female", "intonation": "Neutral", "pitch": "Middle pitch"},
+    "eve": {"gender": "Female", "intonation": "Neutral", "pitch": "Higher pitch"},
+    "fantine": {"gender": "Female", "intonation": "Neutral", "pitch": "Higher pitch"},
+    "george": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "giovanni": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "jane": {"gender": "Female", "intonation": "Neutral", "pitch": "Middle pitch"},
+    "javert": {"gender": "Male", "intonation": "Conversational", "pitch": "Lower pitch"},
+    "jean": {"gender": "Male", "intonation": "Freeform", "pitch": "Lower pitch"},
+    "juergen": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "lola": {"gender": "Female", "intonation": "Neutral", "pitch": "Middle pitch"},
+    "marius": {"gender": "Male", "intonation": "Conversational", "pitch": "Middle pitch"},
+    "mary": {"gender": "Female", "intonation": "Neutral", "pitch": "Higher pitch"},
+    "michael": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "paul": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "peter_yearsley": {"gender": "Male", "intonation": "Narrative", "pitch": "Lower pitch"},
+    "rafael": {"gender": "Male", "intonation": "Neutral", "pitch": "Lower pitch"},
+    "stuart_bell": {"gender": "Male", "intonation": "Narrative", "pitch": "Lower pitch"},
+    "vera": {"gender": "Female", "intonation": "Neutral", "pitch": "Higher pitch"},
+}
+DEFAULT_BUILTIN_VOICE_SPECS = {
+    "gender": "Unlabeled",
+    "intonation": "Neutral",
+    "pitch": "Pitch unavailable",
+}
+
 web_app = FastAPI(
     title="Kyutai Pocket TTS API", description="Text-to-Speech generation API", version="1.0.0"
 )
@@ -110,13 +145,18 @@ async def voices():
     default_voice = get_default_voice_for_language(origin)
     return {
         "default_voice": default_voice,
+        "preview_text": get_preview_text_for_language(origin),
         "max_tokens_per_chunk": MAX_TOKEN_PER_CHUNK,
         "hard_character_limit": None,
         "character_limit_note": (
             "No hard character limit is enforced; long text is split into tokenizer chunks."
         ),
         "voices": [
-            {"name": name, "language": BUILTIN_VOICE_LANGUAGES.get(name, "")}
+            {
+                "name": name,
+                "language": BUILTIN_VOICE_LANGUAGES.get(name, ""),
+                "specs": BUILTIN_VOICE_SPECS.get(name, DEFAULT_BUILTIN_VOICE_SPECS),
+            }
             for name in sorted(_ORIGINS_OF_PREDEFINED_VOICES)
         ],
     }

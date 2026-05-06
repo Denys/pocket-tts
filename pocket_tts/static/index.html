@@ -51,9 +51,55 @@
                 Built-in voice:
             </label>
             <select id="voice-select" class="w-full border rounded p-2"></select>
+            <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                    type="button"
+                    id="preferred-voice-toggle"
+                    class="px-3 py-2 rounded text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    aria-pressed="false"
+                >
+                    Add preferred
+                </button>
+                <span
+                    id="preferred-voice-status"
+                    class="min-h-5 text-xs text-gray-500"
+                    aria-live="polite"
+                ></span>
+            </div>
+            <div class="mt-3">
+                <p class="mb-2 text-xs font-medium text-gray-700">Preferred voices</p>
+                <div
+                    id="preferred-voices"
+                    class="flex flex-wrap gap-2"
+                    aria-label="Preferred voices"
+                ></div>
+            </div>
             <p id="voice-summary" class="text-xs text-gray-500 mt-1">
                 Choose a built-in voice, or use the advanced URL/name override below.
             </p>
+            <div
+                id="voice-specs"
+                class="mt-2 flex flex-wrap gap-2"
+                aria-label="Selected voice specs"
+                aria-live="polite"
+            ></div>
+            <div class="mt-3 space-y-2">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <button
+                        type="button"
+                        id="voice-preview-btn"
+                        class="px-3 py-2 rounded text-sm font-medium text-white bg-gray-800 hover:bg-gray-900 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                        <span id="voice-preview-text">Preview voice</span>
+                    </button>
+                    <span
+                        id="voice-preview-status"
+                        class="min-h-5 text-xs text-gray-500"
+                        aria-live="polite"
+                    ></span>
+                </div>
+                <audio id="voice-preview-audio" controls class="hidden w-full"></audio>
+            </div>
 
             <label for="voice-url-input" class="block text-sm font-medium text-gray-700 mt-4 mb-2">
                 Advanced voice URL or name override:
@@ -255,9 +301,16 @@
             }
         }
 
+        const PREFERRED_VOICES_STORAGE_KEY = 'pocket-tts-preferred-voices';
+
         // Application state
         let streamingPlayer = null;
         let currentAudioBlob = null;
+        let currentPreviewAudioUrl = null;
+        let voicePreviewSampleText = '';
+        let builtInVoices = [];
+        let preferredVoiceNames = [];
+        let preferredVoiceStatusTimer = null;
 
         // DOM elements
         const textInput = document.getElementById('text-input');
@@ -273,9 +326,24 @@
         const charCount = document.getElementById('char-count');
         const voiceSelect = document.getElementById('voice-select');
         const voiceSummary = document.getElementById('voice-summary');
+        const preferredVoiceToggle = document.getElementById('preferred-voice-toggle');
+        const preferredVoiceStatus = document.getElementById('preferred-voice-status');
+        const preferredVoices = document.getElementById('preferred-voices');
+        const voiceSpecs = document.getElementById('voice-specs');
+        const voiceUrlInput = document.getElementById('voice-url-input');
+        const voiceWavInput = document.getElementById('voice-wav-input');
+        const voicePreviewBtn = document.getElementById('voice-preview-btn');
+        const voicePreviewText = document.getElementById('voice-preview-text');
+        const voicePreviewStatus = document.getElementById('voice-preview-status');
+        const voicePreviewAudio = document.getElementById('voice-preview-audio');
 
         // Event listeners
         generateBtn.addEventListener('click', generateAudio);
+        voicePreviewBtn.addEventListener('click', previewVoice);
+        preferredVoiceToggle.addEventListener('click', togglePreferredVoice);
+        voiceSelect.addEventListener('change', renderVoiceSelectionState);
+        voiceUrlInput.addEventListener('input', renderVoiceSelectionState);
+        voiceWavInput.addEventListener('change', renderVoiceSelectionState);
         textInput.addEventListener('input', updateCharacterCount);
         textFileInput.addEventListener('change', loadTextFile);
 
@@ -292,6 +360,201 @@
         function updateCharacterCount() {
             const count = textInput.value.length;
             charCount.textContent = `${count.toLocaleString()} character${count === 1 ? '' : 's'}`;
+        }
+
+        function getTtsEndpoint() {
+            return `${window.location.pathname.replace(/\/+$/, '')}/tts`;
+        }
+
+        function appendSelectedVoice(formData) {
+            const voiceUrl = voiceUrlInput.value.trim();
+            const selectedVoice = voiceSelect.value;
+            const voiceWavFile = voiceWavInput.files[0];
+
+            if (voiceWavFile) {
+                formData.append('voice_wav', voiceWavFile);
+            } else if (voiceUrl) {
+                formData.append('voice_url', voiceUrl);
+            } else if (selectedVoice) {
+                formData.append('voice_url', selectedVoice);
+            }
+        }
+
+        function buildTtsFormData(text) {
+            const formData = new FormData();
+            formData.append('text', text);
+            appendSelectedVoice(formData);
+            return formData;
+        }
+
+        function getPreviewTextFallback() {
+            const defaultText = (textInput.defaultValue || textInput.value).trim();
+            const sentenceMatch = defaultText.match(/^.*?[.!?](\s|$)/);
+            return sentenceMatch ? sentenceMatch[0].trim() : defaultText;
+        }
+
+        function stopStreamingPlayback() {
+            if (streamingPlayer) {
+                streamingPlayer.stop();
+                streamingPlayer = null;
+            }
+        }
+
+        function stopPreviewPlayback() {
+            voicePreviewAudio.pause();
+            voicePreviewAudio.currentTime = 0;
+        }
+
+        function loadPreferredVoiceNames() {
+            try {
+                const storedValue = localStorage.getItem(PREFERRED_VOICES_STORAGE_KEY);
+                const parsedValue = storedValue ? JSON.parse(storedValue) : [];
+                if (!Array.isArray(parsedValue)) return [];
+
+                return [...new Set(parsedValue.filter((name) => typeof name === 'string'))];
+            } catch (error) {
+                console.warn('Unable to load preferred voices:', error);
+                return [];
+            }
+        }
+
+        function savePreferredVoiceNames() {
+            try {
+                localStorage.setItem(
+                    PREFERRED_VOICES_STORAGE_KEY,
+                    JSON.stringify(preferredVoiceNames)
+                );
+            } catch (error) {
+                console.warn('Unable to save preferred voices:', error);
+            }
+        }
+
+        function findBuiltInVoice(name) {
+            return builtInVoices.find((voice) => voice.name === name);
+        }
+
+        function isUsingCustomVoice() {
+            return Boolean(voiceUrlInput.value.trim() || voiceWavInput.files[0]);
+        }
+
+        function showPreferredVoiceStatus(message) {
+            preferredVoiceStatus.textContent = message;
+
+            if (preferredVoiceStatusTimer) {
+                clearTimeout(preferredVoiceStatusTimer);
+            }
+
+            preferredVoiceStatusTimer = setTimeout(() => {
+                preferredVoiceStatus.textContent = '';
+            }, 2500);
+        }
+
+        function selectPreferredVoice(name) {
+            if (!findBuiltInVoice(name)) return;
+
+            voiceUrlInput.value = '';
+            voiceWavInput.value = '';
+            voiceSelect.value = name;
+            renderVoiceSelectionState();
+        }
+
+        function createPreferredVoiceButton(voice) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = (
+                'rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ' +
+                'hover:bg-blue-100'
+            );
+            button.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
+            button.addEventListener('click', () => selectPreferredVoice(voice.name));
+            return button;
+        }
+
+        function renderPreferredVoices() {
+            preferredVoices.replaceChildren();
+
+            const knownPreferredVoices = preferredVoiceNames
+                .map((name) => findBuiltInVoice(name))
+                .filter(Boolean);
+
+            if (knownPreferredVoices.length === 0) {
+                const emptyMessage = document.createElement('span');
+                emptyMessage.className = 'text-xs text-gray-500';
+                emptyMessage.textContent = 'No preferred voices yet.';
+                preferredVoices.append(emptyMessage);
+                return;
+            }
+
+            for (const voice of knownPreferredVoices) {
+                preferredVoices.append(createPreferredVoiceButton(voice));
+            }
+        }
+
+        function renderPreferredVoiceToggle() {
+            const selectedVoice = voiceSelect.value;
+            const hasSelectedVoice = Boolean(findBuiltInVoice(selectedVoice));
+            const hasCustomVoice = isUsingCustomVoice();
+            const isPreferred = preferredVoiceNames.includes(selectedVoice);
+
+            preferredVoiceToggle.disabled = !hasSelectedVoice || hasCustomVoice;
+            preferredVoiceToggle.textContent = isPreferred ? 'Remove preferred' : 'Add preferred';
+            preferredVoiceToggle.setAttribute('aria-pressed', isPreferred ? 'true' : 'false');
+        }
+
+        function renderVoiceSelectionState() {
+            renderVoiceSpecs();
+            renderPreferredVoices();
+            renderPreferredVoiceToggle();
+        }
+
+        function togglePreferredVoice() {
+            const selectedVoice = voiceSelect.value;
+            if (!findBuiltInVoice(selectedVoice)) return;
+
+            if (isUsingCustomVoice()) {
+                showPreferredVoiceStatus('Clear custom voice first.');
+                return;
+            }
+
+            if (preferredVoiceNames.includes(selectedVoice)) {
+                preferredVoiceNames = preferredVoiceNames.filter((name) => name !== selectedVoice);
+                showPreferredVoiceStatus(`Removed ${selectedVoice}.`);
+            } else {
+                preferredVoiceNames = [...preferredVoiceNames, selectedVoice];
+                showPreferredVoiceStatus(`Added ${selectedVoice}.`);
+            }
+
+            savePreferredVoiceNames();
+            renderVoiceSelectionState();
+        }
+
+        function createSpecChip(text) {
+            const chip = document.createElement('span');
+            chip.className = 'rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700';
+            chip.textContent = text;
+            return chip;
+        }
+
+        function renderVoiceSpecs() {
+            voiceSpecs.replaceChildren();
+
+            const hasCustomVoice = voiceUrlInput.value.trim() || voiceWavInput.files[0];
+            if (hasCustomVoice) {
+                voiceSpecs.append(
+                    createSpecChip('Custom voice'),
+                    createSpecChip('Specs unavailable')
+                );
+                return;
+            }
+
+            const voice = builtInVoices.find((item) => item.name === voiceSelect.value);
+            if (!voice || !voice.specs) return;
+
+            voiceSpecs.append(
+                createSpecChip(voice.specs.gender),
+                createSpecChip(voice.specs.intonation),
+                createSpecChip(voice.specs.pitch)
+            );
         }
 
         async function loadTextFile(event) {
@@ -317,9 +580,12 @@
             if (!response.ok) return;
 
             const data = await response.json();
+            builtInVoices = data.voices || [];
+            preferredVoiceNames = loadPreferredVoiceNames().filter((name) => findBuiltInVoice(name));
+            savePreferredVoiceNames();
             voiceSelect.innerHTML = '';
 
-            for (const voice of data.voices) {
+            for (const voice of builtInVoices) {
                 const option = document.createElement('option');
                 option.value = voice.name;
                 option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
@@ -330,6 +596,65 @@
             }
 
             voiceSummary.textContent = `${data.voices.length} built-in voices. ${data.character_limit_note} Current chunk target: ${data.max_tokens_per_chunk} tokenizer tokens.`;
+            voicePreviewSampleText = data.preview_text || getPreviewTextFallback();
+            renderVoiceSelectionState();
+        }
+
+        async function previewVoice() {
+            const previewText = (voicePreviewSampleText || getPreviewTextFallback()).trim();
+
+            if (!previewText) {
+                voicePreviewStatus.textContent = 'Preview text unavailable.';
+                setTimeout(() => {
+                    voicePreviewStatus.textContent = '';
+                }, 3000);
+                return;
+            }
+
+            stopStreamingPlayback();
+            audio.pause();
+            stopPreviewPlayback();
+
+            voicePreviewBtn.disabled = true;
+            generateBtn.disabled = true;
+            voicePreviewText.textContent = 'Preparing...';
+            voicePreviewStatus.textContent = `Generating: ${previewText}`;
+
+            try {
+                const response = await fetch(getTtsEndpoint(), {
+                    method: 'POST',
+                    body: buildTtsFormData(previewText)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const blob = await response.blob();
+
+                if (currentPreviewAudioUrl) {
+                    URL.revokeObjectURL(currentPreviewAudioUrl);
+                }
+
+                currentPreviewAudioUrl = URL.createObjectURL(blob);
+                voicePreviewAudio.src = currentPreviewAudioUrl;
+                voicePreviewAudio.classList.remove('hidden');
+                voicePreviewStatus.textContent = 'Preview ready.';
+
+                try {
+                    await voicePreviewAudio.play();
+                    voicePreviewStatus.textContent = 'Playing preview.';
+                } catch (playError) {
+                    voicePreviewStatus.textContent = 'Preview ready. Press play to listen.';
+                }
+            } catch (error) {
+                console.error('Error generating voice preview:', error);
+                voicePreviewStatus.textContent = `Error: ${error.message}`;
+            } finally {
+                voicePreviewBtn.disabled = false;
+                generateBtn.disabled = false;
+                voicePreviewText.textContent = 'Preview voice';
+            }
         }
 
         async function generateAudio() {
@@ -342,10 +667,8 @@
             }
 
             // Stop any currently playing audio
-            if (streamingPlayer) {
-                streamingPlayer.stop();
-                streamingPlayer = null;
-            }
+            stopStreamingPlayback();
+            stopPreviewPlayback();
 
             // Track timing
             const startTime = performance.now();
@@ -362,34 +685,15 @@
 
             // Update UI
             generateBtn.disabled = true;
+            voicePreviewBtn.disabled = true;
             generateText.textContent = 'Generating...';
             showStatus('Generating speech...', true);
             audioSection.classList.add('hidden');
 
             try {
-                const formData = new FormData();
-                formData.append('text', text);
-
-                // Add voice URL if provided (only if no WAV file is uploaded)
-                const voiceUrl = document.getElementById('voice-url-input').value.trim();
-                const selectedVoice = voiceSelect.value;
-                const voiceWavFile = document.getElementById('voice-wav-input').files[0];
-
-                if (voiceWavFile) {
-                    // If WAV file is uploaded, only use the WAV file (ignore voice URL)
-                    formData.append('voice_wav', voiceWavFile);
-                } else if (voiceUrl) {
-                    // Only use voice URL if no WAV file is uploaded
-                    formData.append('voice_url', voiceUrl);
-                } else if (selectedVoice) {
-                    formData.append('voice_url', selectedVoice);
-                }
-
-                const ttsEndpoint = `${window.location.pathname.replace(/\/+$/, '')}/tts`;
-
-                const response = await fetch(ttsEndpoint, {
+                const response = await fetch(getTtsEndpoint(), {
                     method: 'POST',
-                    body: formData
+                    body: buildTtsFormData(text)
                 });
 
                 if (!response.ok) {
@@ -455,6 +759,7 @@
             } finally {
                 // Re-enable button
                 generateBtn.disabled = false;
+                voicePreviewBtn.disabled = false;
                 generateText.textContent = 'Generate Audio';
             }
         }
@@ -463,6 +768,7 @@
         window.addEventListener('load', () => {
             textInput.focus();
             updateCharacterCount();
+            voicePreviewSampleText = getPreviewTextFallback();
             loadVoices();
         });
     </script>

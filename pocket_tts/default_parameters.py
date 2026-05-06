@@ -57,6 +57,14 @@ def get_default_text_for_language(language: str | None) -> str:
     return DEFAULT_TEXT_FOR_LANGUAGE[DEFAULT_LANGUAGE]
 
 
+def get_preview_text_for_language(language: str | None) -> str:
+    default_text = get_default_text_for_language(language)
+    first_sentence, separator, _ = default_text.partition(". ")
+    if separator:
+        return f"{first_sentence}."
+    return default_text
+
+
 def get_default_voice_for_language(language: str | None) -> str:
     for key, voice in DEFAULT_VOICE_FOR_LANGUAGE.items():
         if language is not None and key in language:
