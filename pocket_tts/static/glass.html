@@ -356,6 +356,28 @@
             accent-color: var(--teal);
         }
 
+        .generation-options {
+            display: grid;
+            grid-template-columns: minmax(150px, 1fr) auto;
+            gap: 7px 12px;
+            align-items: center;
+        }
+
+        .speed-control {
+            grid-template-columns: auto minmax(96px, 1fr);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .speed-control label {
+            white-space: nowrap;
+        }
+
+        .speed-control select {
+            min-height: 38px;
+            border-radius: 16px;
+        }
+
         .empty {
             color: var(--faint);
             font-size: 0.9rem;
@@ -426,6 +448,10 @@
             min-height: 22px;
         }
 
+        #glass-status:empty {
+            min-height: 0;
+        }
+
         .status.error {
             color: var(--danger);
         }
@@ -483,22 +509,29 @@
         }
 
         .meter {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .meter[hidden] {
+            display: none;
         }
 
         .meter-item {
-            padding: 9px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 28px;
+            padding: 0 9px;
             border: 1px solid rgba(255, 255, 255, 0.15);
-            border-radius: 14px;
+            border-radius: 999px;
             background: rgba(255, 255, 255, 0.08);
         }
 
         .meter-item strong {
-            display: block;
-            margin-top: 4px;
-            font-size: 0.96rem;
+            font-size: 0.9rem;
         }
 
         @media (max-width: 860px) {
@@ -517,7 +550,11 @@
                 flex-direction: column;
             }
 
-            .meter {
+            .generation-options {
+                grid-template-columns: 1fr;
+            }
+
+            .speed-control {
                 grid-template-columns: 1fr;
             }
         }
@@ -635,10 +672,27 @@
 
                 <section id="glass-generate-card" class="glass-card">
                     <div class="card-body stack">
-                        <label class="toggle-label">
-                            <input id="glass-silent-generate-input" type="checkbox">
-                            <span>Generate silently</span>
-                        </label>
+                        <div class="generation-options">
+                            <div class="field speed-control">
+                                <label for="glass-playback-speed-select">Playback speed</label>
+                                <select
+                                    id="glass-playback-speed-select"
+                                    aria-label="Playback speed. Download WAV is rendered at selected speed."
+                                    title="Download WAV is rendered at selected speed."
+                                >
+                                    <option value="0.75">0.75x</option>
+                                    <option value="0.9">0.9x</option>
+                                    <option value="1" selected>1.0x</option>
+                                    <option value="1.1">1.1x</option>
+                                    <option value="1.25">1.25x</option>
+                                    <option value="1.5">1.5x</option>
+                                </select>
+                            </div>
+                            <label class="toggle-label">
+                                <input id="glass-silent-generate-input" type="checkbox">
+                                <span>Generate silently</span>
+                            </label>
+                        </div>
                         <button id="glass-generate-btn" class="button primary" type="button">Generate audio</button>
                         <div id="glass-status" class="status" aria-live="polite"></div>
                         <div id="glass-download-progress" class="progress">
@@ -659,7 +713,7 @@
                                 aria-disabled="true"
                             >Download WAV</a>
                         </div>
-                        <div class="meter">
+                        <div class="meter" hidden>
                             <div class="meter-item">
                                 <span class="tiny">Preview text</span>
                                 <strong id="glass-preview-meter">Ready</strong>
@@ -681,13 +735,17 @@
 
     <script>
         const PREFERRED_VOICES_STORAGE_KEY = 'pocket-tts-preferred-voices';
+        const PLAYBACK_SPEED_STORAGE_KEY = 'pocket-tts-glass-playback-speed';
         const API_BASE = window.location.origin;
 
         let builtInVoices = [];
         let preferredVoiceNames = [];
         let previewText = '';
         let currentAudioUrl = null;
+        let currentDownloadUrl = null;
         let currentPreviewAudioUrl = null;
+        let currentGeneratedAudioBlob = null;
+        let downloadRenderToken = 0;
         let preferredStatusTimer = null;
 
         const textInput = document.getElementById('glass-text-input');
@@ -706,6 +764,7 @@
         const voiceUrlInput = document.getElementById('glass-voice-url-input');
         const voiceWavInput = document.getElementById('glass-voice-wav-input');
         const silentGenerateInput = document.getElementById('glass-silent-generate-input');
+        const playbackSpeedSelect = document.getElementById('glass-playback-speed-select');
         const generateBtn = document.getElementById('glass-generate-btn');
         const status = document.getElementById('glass-status');
         const audioPanel = document.getElementById('glass-audio-panel');
@@ -727,6 +786,7 @@
         preferredToggle.addEventListener('click', togglePreferredVoice);
         previewBtn.addEventListener('click', previewVoice);
         generateBtn.addEventListener('click', generateAudio);
+        playbackSpeedSelect.addEventListener('change', handlePlaybackSpeedChange);
 
         function updateCharacterCount() {
             const count = textInput.value.length;
@@ -758,22 +818,77 @@
             previewStatus.classList.toggle('error', isError);
         }
 
+        function getSelectedPlaybackSpeed() {
+            const speed = Number(playbackSpeedSelect.value);
+            return Number.isFinite(speed) && speed > 0 ? speed : 1;
+        }
+
+        function formatPlaybackSpeed(speed) {
+            return `${speed.toFixed(2).replace(/\.?0+$/, '')}x`;
+        }
+
+        function applyPlaybackSpeed(shouldPersist = false) {
+            const speed = getSelectedPlaybackSpeed();
+            for (const player of [previewAudio, audio]) {
+                player.defaultPlaybackRate = speed;
+                player.playbackRate = speed;
+                if ('preservesPitch' in player) player.preservesPitch = false;
+                if ('mozPreservesPitch' in player) player.mozPreservesPitch = false;
+                if ('webkitPreservesPitch' in player) player.webkitPreservesPitch = false;
+            }
+
+            if (!shouldPersist) return;
+            try {
+                localStorage.setItem(PLAYBACK_SPEED_STORAGE_KEY, playbackSpeedSelect.value);
+            } catch {
+                // Playback speed still applies for the current session.
+            }
+        }
+
+        function loadPlaybackSpeedPreference() {
+            try {
+                const storedSpeed = localStorage.getItem(PLAYBACK_SPEED_STORAGE_KEY);
+                const hasStoredOption = [...playbackSpeedSelect.options].some(
+                    (option) => option.value === storedSpeed
+                );
+                if (hasStoredOption) playbackSpeedSelect.value = storedSpeed;
+            } catch {
+                // Keep the default speed when local storage is unavailable.
+            }
+
+            applyPlaybackSpeed();
+        }
+
+        function handlePlaybackSpeedChange() {
+            applyPlaybackSpeed(true);
+            if (currentGeneratedAudioBlob) renderSpeedAdjustedDownload();
+        }
+
         function formatBytes(bytes) {
             if (bytes < 1024) return `${bytes} B`;
             if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
             return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
         }
 
-        function setDownloadReady(isReady, href = null) {
+        function getDownloadFileName(speed) {
+            if (speed === 1) return 'pocket-tts-glass.wav';
+            return `pocket-tts-glass-${formatPlaybackSpeed(speed).replace('.', 'p')}.wav`;
+        }
+
+        function setDownloadReady(isReady, href = null, speed = getSelectedPlaybackSpeed()) {
             downloadLink.setAttribute('aria-disabled', isReady ? 'false' : 'true');
             downloadLink.classList.toggle('disabled', !isReady);
 
             if (isReady && href) {
                 downloadLink.href = href;
-                downloadLink.download = 'pocket-tts-glass.wav';
+                downloadLink.download = getDownloadFileName(speed);
+                downloadLink.textContent = speed === 1
+                    ? 'Download WAV'
+                    : `Download ${formatPlaybackSpeed(speed)} WAV`;
             } else {
                 downloadLink.removeAttribute('href');
                 downloadLink.removeAttribute('download');
+                downloadLink.textContent = 'Download WAV';
             }
         }
 
@@ -804,10 +919,16 @@
         }
 
         function resetGeneratedAudioState() {
+            downloadRenderToken += 1;
             if (currentAudioUrl) {
                 URL.revokeObjectURL(currentAudioUrl);
                 currentAudioUrl = null;
             }
+            if (currentDownloadUrl) {
+                URL.revokeObjectURL(currentDownloadUrl);
+                currentDownloadUrl = null;
+            }
+            currentGeneratedAudioBlob = null;
             audio.pause();
             audio.removeAttribute('src');
             audio.load();
@@ -836,6 +957,120 @@
 
             updateDownloadProgress(receivedBytes, contentLength, true);
             return new Blob(chunks, { type: response.headers.get('Content-Type') || 'audio/wav' });
+        }
+
+        function writeAscii(view, offset, value) {
+            for (let index = 0; index < value.length; index += 1) {
+                view.setUint8(offset + index, value.charCodeAt(index));
+            }
+        }
+
+        function encodeAudioBufferToWav(audioBuffer) {
+            const bytesPerSample = 2;
+            const channelCount = audioBuffer.numberOfChannels;
+            const blockAlign = channelCount * bytesPerSample;
+            const dataLength = audioBuffer.length * blockAlign;
+            const wavBuffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(wavBuffer);
+            const channels = Array.from(
+                { length: channelCount },
+                (_, channel) => audioBuffer.getChannelData(channel)
+            );
+
+            writeAscii(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeAscii(view, 8, 'WAVE');
+            writeAscii(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, channelCount, true);
+            view.setUint32(24, audioBuffer.sampleRate, true);
+            view.setUint32(28, audioBuffer.sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true);
+            writeAscii(view, 36, 'data');
+            view.setUint32(40, dataLength, true);
+
+            let offset = 44;
+            for (let frame = 0; frame < audioBuffer.length; frame += 1) {
+                for (let channel = 0; channel < channelCount; channel += 1) {
+                    const sample = Math.max(-1, Math.min(1, channels[channel][frame]));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+                    offset += bytesPerSample;
+                }
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+        }
+
+        async function createSpeedAdjustedWavBlob(sourceBlob, speed) {
+            if (speed === 1) return sourceBlob;
+
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass || !window.OfflineAudioContext) {
+                throw new Error('This browser cannot render a speed-adjusted WAV.');
+            }
+
+            const audioContext = new AudioContextClass();
+            let sourceBuffer;
+            try {
+                sourceBuffer = await audioContext.decodeAudioData(await sourceBlob.arrayBuffer());
+            } finally {
+                if (audioContext.close) await audioContext.close();
+            }
+
+            const outputLength = Math.max(1, Math.ceil(sourceBuffer.length / speed));
+            const offlineContext = new OfflineAudioContext(
+                sourceBuffer.numberOfChannels,
+                outputLength,
+                sourceBuffer.sampleRate
+            );
+            const source = offlineContext.createBufferSource();
+            source.buffer = sourceBuffer;
+            source.playbackRate.value = speed;
+            source.connect(offlineContext.destination);
+            source.start(0);
+
+            return encodeAudioBufferToWav(await offlineContext.startRendering());
+        }
+
+        async function renderSpeedAdjustedDownload() {
+            if (!currentGeneratedAudioBlob) return;
+
+            const speed = getSelectedPlaybackSpeed();
+            const renderToken = downloadRenderToken + 1;
+            downloadRenderToken = renderToken;
+            setDownloadReady(false);
+            downloadProgress.classList.add('visible');
+            downloadProgressText.textContent = speed === 1
+                ? 'Preparing WAV download...'
+                : `Rendering ${formatPlaybackSpeed(speed)} WAV download...`;
+            downloadProgressBytes.textContent = '';
+            downloadProgressBar.style.width = speed === 1 ? '100%' : '62%';
+
+            try {
+                const downloadBlob = await createSpeedAdjustedWavBlob(
+                    currentGeneratedAudioBlob,
+                    speed
+                );
+                if (renderToken !== downloadRenderToken) return;
+
+                if (currentDownloadUrl) URL.revokeObjectURL(currentDownloadUrl);
+                currentDownloadUrl = URL.createObjectURL(downloadBlob);
+                setDownloadReady(true, currentDownloadUrl, speed);
+                downloadProgressText.textContent = speed === 1
+                    ? 'Download ready.'
+                    : `${formatPlaybackSpeed(speed)} WAV download ready.`;
+                downloadProgressBytes.textContent = formatBytes(downloadBlob.size);
+                downloadProgressBar.style.width = '100%';
+            } catch (error) {
+                if (renderToken !== downloadRenderToken) return;
+                setDownloadReady(false);
+                downloadProgressText.textContent = 'Unable to render adjusted WAV.';
+                downloadProgressBytes.textContent = '';
+                downloadProgressBar.style.width = '0%';
+                setStatus(error.message, true);
+            }
         }
 
         function getPreviewTextFallback() {
@@ -1042,7 +1277,9 @@
                 voiceSelect.append(option);
             }
 
-            voiceCount.textContent = `${builtInVoices.length} voices`;
+            voiceCount.textContent = `${builtInVoices.length} voices / ${
+                data.max_tokens_per_chunk || '-'
+            } token chunks`;
             renderVoiceState();
         }
 
@@ -1062,11 +1299,14 @@
                 if (currentPreviewAudioUrl) URL.revokeObjectURL(currentPreviewAudioUrl);
                 currentPreviewAudioUrl = url;
                 previewAudio.src = url;
+                applyPlaybackSpeed();
                 previewPanel.classList.add('visible');
             } else {
                 currentAudioUrl = url;
+                currentGeneratedAudioBlob = blob;
                 audio.src = url;
-                setDownloadReady(true, url);
+                applyPlaybackSpeed();
+                renderSpeedAdjustedDownload();
                 audioPanel.classList.add('visible');
             }
 
@@ -1139,6 +1379,7 @@
         window.addEventListener('load', () => {
             updateCharacterCount();
             previewText = getPreviewTextFallback();
+            loadPlaybackSpeedPreference();
             loadVoices();
         });
     </script>
