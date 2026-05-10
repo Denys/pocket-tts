@@ -28,6 +28,7 @@ audio = ["soundfile>=0.12.0"]
 quantize = ["torchao>=0.16.0"]
 desktop = ["pywebview>=6.2.1,<7"]
 build-windows = ["pillow>=10.0.0", "pyinstaller>=6.0.0"]
+gradio = ["gradio>=5.0,<7"]
 
 
 [dependency-groups]

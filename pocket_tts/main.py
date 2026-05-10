@@ -18,6 +18,7 @@ from pocket_tts.data.audio import stream_audio_chunks
 from pocket_tts.default_parameters import (
     DEFAULT_EOS_THRESHOLD,
     DEFAULT_FRAMES_AFTER_EOS,
+    DEFAULT_LANGUAGE,
     DEFAULT_LSD_DECODE_STEPS,
     DEFAULT_NOISE_CLAMP,
     DEFAULT_TEMPERATURE,
@@ -42,8 +43,26 @@ cli_app = typer.Typer(
 # The pocket-tts server implementation
 # ------------------------------------------------------
 
+
+def launch_gradio_app(**kwargs):
+    """Lazy wrapper so Gradio remains an optional dependency."""
+    from pocket_tts.gradio_app import launch_gradio_app as _launch_gradio_app
+
+    return _launch_gradio_app(**kwargs)
+
 # Global model instance
 tts_model: TTSModel | None = None
+server_quantize = False
+
+WEB_LANGUAGE_OPTIONS = (
+    {"value": "english", "label": "English"},
+    {"value": "italian", "label": "Italian"},
+    {"value": "spanish", "label": "Spanish"},
+    {"value": "german", "label": "German"},
+    {"value": "portuguese", "label": "Portuguese"},
+    {"value": "french_24l", "label": "French"},
+)
+SUPPORTED_WEB_LANGUAGES = {option["value"] for option in WEB_LANGUAGE_OPTIONS}
 
 BUILTIN_VOICE_LANGUAGES = {
     "alba": "en",
@@ -139,22 +158,41 @@ async def glass():
 def _read_static_page(filename: str) -> str:
     static_path = Path(__file__).parent / "static" / filename
     content = static_path.read_text()
-    origin = str(tts_model.origin) if tts_model is not None else None
-    return content.replace("DEFAULT_TEXT_PROMPT", get_default_text_for_language(origin))
+    return content.replace("DEFAULT_TEXT_PROMPT", get_default_text_for_language(_current_language()))
 
 
-@web_app.get("/health")
-async def health():
-    return {"status": "healthy"}
+def _current_language() -> str:
+    if tts_model is None:
+        return DEFAULT_LANGUAGE
+
+    origin = getattr(tts_model, "origin", None)
+    if origin is None:
+        return DEFAULT_LANGUAGE
+
+    return Path(str(origin)).stem
 
 
-@web_app.get("/voices")
-async def voices():
-    origin = str(tts_model.origin) if tts_model is not None else None
-    default_voice = get_default_voice_for_language(origin)
+def _language_options_payload() -> list[dict[str, str]]:
+    return [
+        {
+            **option,
+            "default_voice": get_default_voice_for_language(option["value"]),
+            "default_text": get_default_text_for_language(option["value"]),
+            "preview_text": get_preview_text_for_language(option["value"]),
+        }
+        for option in WEB_LANGUAGE_OPTIONS
+    ]
+
+
+def _voice_metadata_payload() -> dict:
+    current_language = _current_language()
+    default_voice = get_default_voice_for_language(current_language)
     return {
+        "current_language": current_language,
+        "languages": _language_options_payload(),
         "default_voice": default_voice,
-        "preview_text": get_preview_text_for_language(origin),
+        "default_text": get_default_text_for_language(current_language),
+        "preview_text": get_preview_text_for_language(current_language),
         "max_tokens_per_chunk": MAX_TOKEN_PER_CHUNK,
         "hard_character_limit": None,
         "character_limit_note": (
@@ -171,7 +209,28 @@ async def voices():
     }
 
 
-def write_to_queue(queue, text_to_generate, model_state):
+@web_app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+
+@web_app.get("/voices")
+async def voices():
+    return _voice_metadata_payload()
+
+
+@web_app.post("/language")
+def switch_language(language: str = Form(...)):
+    selected_language = language.strip()
+    if selected_language not in SUPPORTED_WEB_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
+
+    global tts_model
+    tts_model = TTSModel.load_model(language=selected_language, quantize=server_quantize)
+    return _voice_metadata_payload()
+
+
+def write_to_queue(model: TTSModel, queue, text_to_generate, model_state):
     """Allows writing to the StreamingResponse as if it were a file."""
 
     class FileLikeToQueue(io.IOBase):
@@ -187,17 +246,15 @@ def write_to_queue(queue, text_to_generate, model_state):
         def close(self):
             self.queue.put(None)
 
-    audio_chunks = tts_model.generate_audio_stream(
-        model_state=model_state, text_to_generate=text_to_generate
-    )
-    stream_audio_chunks(FileLikeToQueue(queue), audio_chunks, tts_model.config.mimi.sample_rate)
+    audio_chunks = model.generate_audio_stream(model_state=model_state, text_to_generate=text_to_generate)
+    stream_audio_chunks(FileLikeToQueue(queue), audio_chunks, model.config.mimi.sample_rate)
 
 
-def generate_data_with_state(text_to_generate: str, model_state: dict):
+def generate_data_with_state(model: TTSModel, text_to_generate: str, model_state: dict):
     queue = Queue()
 
     # Run your function in a thread
-    thread = threading.Thread(target=write_to_queue, args=(queue, text_to_generate, model_state))
+    thread = threading.Thread(target=write_to_queue, args=(model, queue, text_to_generate, model_state))
     thread.start()
 
     # Yield data as it becomes available
@@ -229,8 +286,12 @@ def text_to_speech(
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
 
+    model = tts_model
+    if model is None:
+        raise HTTPException(status_code=503, detail="TTS model is not loaded")
+
     if voice_url is None and voice_wav is None:
-        voice_url = get_default_voice_for_language(str(tts_model.origin))
+        voice_url = get_default_voice_for_language(str(model.origin))
 
     if voice_url is not None and voice_wav is not None:
         raise HTTPException(status_code=400, detail="Cannot provide both voice_url and voice_wav")
@@ -246,7 +307,7 @@ def text_to_speech(
             raise HTTPException(
                 status_code=400, detail="voice_url must start with http://, https://, or hf://"
             )
-        model_state = tts_model._cached_get_state_for_audio_prompt(voice_url)
+        model_state = model._cached_get_state_for_audio_prompt(voice_url)
         logging.warning("Using voice from URL: %s", voice_url)
     elif voice_wav is not None:
         # Use uploaded voice file - preserve extension for format detection
@@ -259,14 +320,14 @@ def text_to_speech(
 
         # Close the file before reading it back (required on Windows)
         try:
-            model_state = tts_model.get_state_for_audio_prompt(Path(temp_file_path), truncate=True)
+            model_state = model.get_state_for_audio_prompt(Path(temp_file_path), truncate=True)
         finally:
             os.unlink(temp_file_path)
     else:
         raise HTTPException(status_code=500, detail="This should never happen.")
 
     return StreamingResponse(
-        generate_data_with_state(text, model_state),
+        generate_data_with_state(model, text, model_state),
         media_type="audio/wav",
         headers={
             "Content-Disposition": "attachment; filename=generated_speech.wav",
@@ -302,7 +363,8 @@ def serve(
 ):
     """Start the FastAPI server."""
 
-    global tts_model
+    global server_quantize, tts_model
+    server_quantize = quantize
     tts_model = TTSModel.load_model(language=language, config=config, quantize=quantize)
 
     uvicorn.run("pocket_tts.main:web_app", host=host, port=port, reload=reload)
@@ -334,6 +396,9 @@ def desktop_app(
 ):
     """Start Pocket TTS as a standalone desktop app."""
 
+    global server_quantize
+    server_quantize = quantize
+
     try:
         run_desktop_app(
             DesktopAppOptions(
@@ -344,6 +409,42 @@ def desktop_app(
                 quantize=quantize,
                 startup_timeout=startup_timeout,
             )
+        )
+    except RuntimeError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+
+@cli_app.command("gradio")
+def gradio_ui(
+    host: Annotated[str, typer.Option(help="Host to bind to")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port to bind to")] = 7860,
+    language: Annotated[
+        str | None,
+        typer.Option(
+            help="Language for the TTS model. Same values as in the `serve` command.",
+            show_default=False,
+        ),
+    ] = None,
+    config: Annotated[
+        str | None,
+        typer.Option(
+            help="Path to locally-saved model config .yaml file. Incompatible with language."
+        ),
+    ] = None,
+    quantize: Annotated[
+        bool, typer.Option(help="Apply int8 quantization to reduce memory usage")
+    ] = False,
+):
+    """Start the optional Gradio Studio UI."""
+
+    try:
+        launch_gradio_app(
+            host=host,
+            port=port,
+            language=language,
+            config=config,
+            quantize=quantize,
         )
     except RuntimeError as exc:
         typer.echo(str(exc), err=True)

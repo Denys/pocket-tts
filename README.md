@@ -121,6 +121,38 @@ This repository also includes launcher wrappers you can double-click after insta
 
 They run `pocket-tts app` from `.venv` when available, or `uvx --from "pocket-tts[desktop]" pocket-tts app`.
 
+### The `gradio` command
+
+If you want a Python-native Gradio interface for quick local experiments, install the Gradio extra
+and run the Studio UI:
+
+```bash
+pip install "pocket-tts[gradio]"
+pocket-tts gradio
+```
+
+From a source checkout:
+
+```bash
+uv run --extra gradio pocket-tts gradio
+```
+
+To start the Gradio UI directly in Italian from this checkout, run:
+
+```powershell
+.\Pocket-TTS-Gradio.bat --language italian
+```
+
+The Windows shortcut helper creates Italian Gradio shortcuts by default:
+
+```powershell
+.\scripts\create_gradio_shortcuts.ps1 -Launch
+```
+
+The Gradio UI exposes script input, `.txt` upload, built-in voice selection, custom voice URL/name,
+uploaded reference audio, generated playback, and WAV download. It queues generation with a
+single-worker limit because Pocket TTS keeps one loaded CPU model instance.
+
 To build a standalone Windows executable with an app icon:
 
 ```powershell

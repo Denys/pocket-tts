@@ -132,6 +132,16 @@
 
             <section class="compact-scroll">
                 <div class="bg-white p-3 rounded-lg shadow">
+                    <label for="language-select" class="block text-sm font-medium text-gray-700 mb-2">
+                        Language:
+                    </label>
+                    <select id="language-select" class="w-full border rounded p-2 text-sm"></select>
+                    <span
+                        id="language-status"
+                        class="mt-1 block min-h-5 text-xs text-gray-500"
+                        aria-live="polite"
+                    ></span>
+
                     <label for="voice-select" class="block text-sm font-medium text-gray-700 mb-2">
                         Built-in voice:
                     </label>
@@ -371,6 +381,8 @@
         let currentAudioBlob = null;
         let currentPreviewAudioUrl = null;
         let voicePreviewSampleText = '';
+        let currentLanguage = '';
+        let webLanguages = [];
         let builtInVoices = [];
         let preferredVoiceNames = [];
         let preferredVoiceStatusTimer = null;
@@ -391,6 +403,8 @@
         const downloadProgressBar = document.getElementById('download-progress-bar');
         const textFileInput = document.getElementById('text-file-input');
         const charCount = document.getElementById('char-count');
+        const languageSelect = document.getElementById('language-select');
+        const languageStatus = document.getElementById('language-status');
         const voiceSelect = document.getElementById('voice-select');
         const voiceSummary = document.getElementById('voice-summary');
         const preferredVoiceToggle = document.getElementById('preferred-voice-toggle');
@@ -407,6 +421,7 @@
 
         // Event listeners
         generateBtn.addEventListener('click', generateAudio);
+        languageSelect.addEventListener('change', switchLanguage);
         voicePreviewBtn.addEventListener('click', previewVoice);
         preferredVoiceToggle.addEventListener('click', togglePreferredVoice);
         voiceSelect.addEventListener('change', renderVoiceSelectionState);
@@ -511,6 +526,65 @@
         function updateCharacterCount() {
             const count = textInput.value.length;
             charCount.textContent = `${count.toLocaleString()} character${count === 1 ? '' : 's'}`;
+        }
+
+        function getLanguageLabel(value) {
+            const language = webLanguages.find((item) => item.value === value);
+            return language ? language.label : value;
+        }
+
+        function updateDefaultText(defaultText, shouldReplaceText) {
+            if (!defaultText) return;
+
+            if (shouldReplaceText) {
+                textInput.value = defaultText;
+                updateCharacterCount();
+            }
+
+            textInput.defaultValue = defaultText;
+        }
+
+        function renderLanguageOptions(data) {
+            webLanguages = data.languages || [];
+            currentLanguage = data.current_language || currentLanguage;
+            languageSelect.replaceChildren();
+
+            for (const language of webLanguages) {
+                const option = document.createElement('option');
+                option.value = language.value;
+                option.textContent = language.label;
+                if (language.value === currentLanguage) {
+                    option.selected = true;
+                }
+                languageSelect.appendChild(option);
+            }
+
+            languageSelect.disabled = webLanguages.length === 0;
+        }
+
+        function applyVoiceMetadata(data, { updateDefaultText = false } = {}) {
+            renderLanguageOptions(data);
+            updateDefaultText(data.default_text, updateDefaultText);
+
+            builtInVoices = data.voices || [];
+            preferredVoiceNames = loadPreferredVoiceNames().filter((name) => findBuiltInVoice(name));
+            savePreferredVoiceNames();
+            voiceSelect.innerHTML = '';
+
+            for (const voice of builtInVoices) {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
+                if (voice.name === data.default_voice) {
+                    option.selected = true;
+                }
+                voiceSelect.appendChild(option);
+            }
+
+            const languageLabel = getLanguageLabel(currentLanguage);
+            voiceSummary.textContent = `${languageLabel} model. ${builtInVoices.length} built-in voices. ${data.character_limit_note} Current chunk target: ${data.max_tokens_per_chunk} tokenizer tokens.`;
+            voicePreviewSampleText = data.preview_text || getPreviewTextFallback();
+            renderVoiceSelectionState();
         }
 
         function getTtsEndpoint() {
@@ -747,24 +821,44 @@
             if (!response.ok) return;
 
             const data = await response.json();
-            builtInVoices = data.voices || [];
-            preferredVoiceNames = loadPreferredVoiceNames().filter((name) => findBuiltInVoice(name));
-            savePreferredVoiceNames();
-            voiceSelect.innerHTML = '';
+            applyVoiceMetadata(data);
+        }
 
-            for (const voice of builtInVoices) {
-                const option = document.createElement('option');
-                option.value = voice.name;
-                option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
-                if (voice.name === data.default_voice) {
-                    option.selected = true;
+        async function switchLanguage() {
+            const selectedLanguage = languageSelect.value;
+            if (!selectedLanguage || selectedLanguage === currentLanguage) return;
+
+            const previousLanguage = currentLanguage;
+            const shouldReplaceDefaultText =
+                !textInput.value.trim() ||
+                textInput.value.trim() === (textInput.defaultValue || '').trim();
+
+            languageSelect.disabled = true;
+            generateBtn.disabled = true;
+            voicePreviewBtn.disabled = true;
+            languageStatus.textContent = `Loading ${getLanguageLabel(selectedLanguage)} model...`;
+
+            try {
+                const formData = new FormData();
+                formData.append('language', selectedLanguage);
+                const response = await fetch('/language', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
                 }
-                voiceSelect.appendChild(option);
-            }
 
-            voiceSummary.textContent = `${data.voices.length} built-in voices. ${data.character_limit_note} Current chunk target: ${data.max_tokens_per_chunk} tokenizer tokens.`;
-            voicePreviewSampleText = data.preview_text || getPreviewTextFallback();
-            renderVoiceSelectionState();
+                const data = await response.json();
+                applyVoiceMetadata(data, { updateDefaultText: shouldReplaceDefaultText });
+                languageStatus.textContent = `${getLanguageLabel(currentLanguage)} ready.`;
+            } catch (error) {
+                console.error('Error switching language:', error);
+                languageSelect.value = previousLanguage;
+                currentLanguage = previousLanguage;
+                languageStatus.textContent = `Error: ${error.message}`;
+            } finally {
+                languageSelect.disabled = false;
+                generateBtn.disabled = false;
+                voicePreviewBtn.disabled = false;
+            }
         }
 
         async function previewVoice() {

@@ -3,6 +3,7 @@
 import re
 import types
 import unittest
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,7 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["default_voice"], "alba")
+        self.assertEqual(data["current_language"], "english")
         self.assertEqual(data["max_tokens_per_chunk"], 50)
         self.assertIsNone(data["hard_character_limit"])
         self.assertEqual(
@@ -26,6 +28,12 @@ class WebUiTests(unittest.TestCase):
             "No hard character limit is enforced; long text is split into tokenizer chunks.",
         )
         self.assertEqual(data["preview_text"], "Hello world.")
+        italian_language = next(
+            language for language in data["languages"] if language["value"] == "italian"
+        )
+        self.assertEqual(italian_language["label"], "Italian")
+        self.assertEqual(italian_language["default_voice"], "giovanni")
+        self.assertEqual(italian_language["preview_text"], "Ciao mondo.")
         self.assertIn(
             {
                 "name": "alba",
@@ -56,6 +64,32 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["preview_text"], "Bonjour le monde.")
 
+    def test_language_endpoint_switches_loaded_model_to_italian(self):
+        previous_model = main.tts_model
+        fake_model = types.SimpleNamespace(origin="italian")
+        try:
+            with mock.patch.object(main.TTSModel, "load_model", return_value=fake_model) as load_model:
+                client = TestClient(web_app)
+
+                response = client.post("/language", data={"language": "italian"})
+        finally:
+            main.tts_model = previous_model
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["current_language"], "italian")
+        self.assertEqual(response.json()["default_voice"], "giovanni")
+        load_model.assert_called_once_with(language="italian", quantize=False)
+
+    def test_language_endpoint_rejects_unsupported_language(self):
+        client = TestClient(web_app)
+
+        with mock.patch.object(main.TTSModel, "load_model") as load_model:
+            response = client.post("/language", data={"language": "klingon"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unsupported language", response.json()["detail"])
+        load_model.assert_not_called()
+
     def test_root_page_contains_voice_dropdown_and_text_upload_controls(self):
         previous_model = main.tts_model
         main.tts_model = types.SimpleNamespace(origin="english")
@@ -71,6 +105,7 @@ class WebUiTests(unittest.TestCase):
         self.assertIn('href="/glass"', response.text)
         self.assertIn("Experimental mode", response.text)
         self.assertIn('id="voice-select"', response.text)
+        self.assertIn('id="language-select"', response.text)
         self.assertIn('id="preferred-voices"', response.text)
         self.assertIn('id="preferred-voice-toggle"', response.text)
         self.assertIn('id="voice-specs"', response.text)
@@ -89,6 +124,7 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("renderPreferredVoices", response.text)
         self.assertIn("renderVoiceSpecs", response.text)
         self.assertIn("previewVoice", response.text)
+        self.assertIn("switchLanguage", response.text)
         self.assertIn("Generate silently", response.text)
         self.assertIn("No hard character limit", response.text)
 
@@ -106,6 +142,7 @@ class WebUiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="glass-app"', response.text)
         self.assertIn('id="glass-voice-select"', response.text)
+        self.assertIn('id="glass-language-select"', response.text)
         self.assertIn('id="glass-preferred-voices"', response.text)
         self.assertIn('id="glass-preview-btn"', response.text)
         self.assertIn('id="glass-silent-generate-input"', response.text)
@@ -122,6 +159,7 @@ class WebUiTests(unittest.TestCase):
         self.assertIn("readResponseBlobWithProgress", response.text)
         self.assertIn("setDownloadReady", response.text)
         self.assertIn("removePreferredVoice", response.text)
+        self.assertIn("switchLanguage", response.text)
         self.assertIn("Generate silently", response.text)
         self.assertIn("glassmorphism", response.text)
         self.assertIn("Pocket TTS", root_response.text)

@@ -644,6 +644,12 @@
                         </div>
 
                         <div class="field">
+                            <label for="glass-language-select">Language</label>
+                            <select id="glass-language-select"></select>
+                            <span id="glass-language-status" class="status"></span>
+                        </div>
+
+                        <div class="field">
                             <label for="glass-voice-select">Built-in voice</label>
                             <select id="glass-voice-select"></select>
                         </div>
@@ -741,6 +747,8 @@
         let builtInVoices = [];
         let preferredVoiceNames = [];
         let previewText = '';
+        let currentLanguage = '';
+        let webLanguages = [];
         let currentAudioUrl = null;
         let currentDownloadUrl = null;
         let currentPreviewAudioUrl = null;
@@ -751,6 +759,8 @@
         const textInput = document.getElementById('glass-text-input');
         const textFileInput = document.getElementById('glass-text-file-input');
         const charCount = document.getElementById('glass-char-count');
+        const languageSelect = document.getElementById('glass-language-select');
+        const languageStatus = document.getElementById('glass-language-status');
         const voiceSelect = document.getElementById('glass-voice-select');
         const voiceCount = document.getElementById('glass-voice-count');
         const voiceSpecs = document.getElementById('glass-voice-specs');
@@ -780,6 +790,7 @@
 
         textInput.addEventListener('input', updateCharacterCount);
         textFileInput.addEventListener('change', loadTextFile);
+        languageSelect.addEventListener('change', switchLanguage);
         voiceSelect.addEventListener('change', renderVoiceState);
         voiceUrlInput.addEventListener('input', renderVoiceState);
         voiceWavInput.addEventListener('change', renderVoiceState);
@@ -791,6 +802,63 @@
         function updateCharacterCount() {
             const count = textInput.value.length;
             charCount.textContent = `${count.toLocaleString()} character${count === 1 ? '' : 's'}`;
+        }
+
+        function getLanguageLabel(value) {
+            const language = webLanguages.find((item) => item.value === value);
+            return language ? language.label : value;
+        }
+
+        function updateDefaultText(defaultText, shouldReplaceText) {
+            if (!defaultText) return;
+
+            if (shouldReplaceText) {
+                textInput.value = defaultText;
+                updateCharacterCount();
+            }
+
+            textInput.defaultValue = defaultText;
+        }
+
+        function renderLanguageOptions(data) {
+            webLanguages = data.languages || [];
+            currentLanguage = data.current_language || currentLanguage;
+            languageSelect.replaceChildren();
+
+            for (const language of webLanguages) {
+                const option = document.createElement('option');
+                option.value = language.value;
+                option.textContent = language.label;
+                if (language.value === currentLanguage) option.selected = true;
+                languageSelect.append(option);
+            }
+
+            languageSelect.disabled = webLanguages.length === 0;
+        }
+
+        function applyVoiceMetadata(data, { updateDefaultText = false } = {}) {
+            renderLanguageOptions(data);
+            updateDefaultText(data.default_text, updateDefaultText);
+
+            builtInVoices = data.voices || [];
+            preferredVoiceNames = loadPreferredVoiceNames().filter((name) => findVoice(name));
+            savePreferredVoiceNames();
+            previewText = data.preview_text || getPreviewTextFallback();
+            chunkMeter.textContent = String(data.max_tokens_per_chunk || '-');
+
+            voiceSelect.replaceChildren();
+            for (const voice of builtInVoices) {
+                const option = document.createElement('option');
+                option.value = voice.name;
+                option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
+                if (voice.name === data.default_voice) option.selected = true;
+                voiceSelect.append(option);
+            }
+
+            voiceCount.textContent = `${getLanguageLabel(currentLanguage)} / ${
+                builtInVoices.length
+            } voices / ${data.max_tokens_per_chunk || '-'} token chunks`;
+            renderVoiceState();
         }
 
         async function loadTextFile(event) {
@@ -1262,25 +1330,44 @@
             }
 
             const data = await response.json();
-            builtInVoices = data.voices || [];
-            preferredVoiceNames = loadPreferredVoiceNames().filter((name) => findVoice(name));
-            savePreferredVoiceNames();
-            previewText = data.preview_text || getPreviewTextFallback();
-            chunkMeter.textContent = String(data.max_tokens_per_chunk || '-');
+            applyVoiceMetadata(data);
+        }
 
-            voiceSelect.replaceChildren();
-            for (const voice of builtInVoices) {
-                const option = document.createElement('option');
-                option.value = voice.name;
-                option.textContent = voice.language ? `${voice.name} (${voice.language})` : voice.name;
-                if (voice.name === data.default_voice) option.selected = true;
-                voiceSelect.append(option);
+        async function switchLanguage() {
+            const selectedLanguage = languageSelect.value;
+            if (!selectedLanguage || selectedLanguage === currentLanguage) return;
+
+            const previousLanguage = currentLanguage;
+            const shouldReplaceDefaultText =
+                !textInput.value.trim() ||
+                textInput.value.trim() === (textInput.defaultValue || '').trim();
+
+            languageSelect.disabled = true;
+            generateBtn.disabled = true;
+            previewBtn.disabled = true;
+            languageStatus.textContent = `Loading ${getLanguageLabel(selectedLanguage)} model...`;
+
+            try {
+                const formData = new FormData();
+                formData.append('language', selectedLanguage);
+                const response = await fetch(`${API_BASE}/language`, {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+                const data = await response.json();
+                applyVoiceMetadata(data, { updateDefaultText: shouldReplaceDefaultText });
+                languageStatus.textContent = `${getLanguageLabel(currentLanguage)} ready.`;
+            } catch (error) {
+                languageSelect.value = previousLanguage;
+                currentLanguage = previousLanguage;
+                languageStatus.textContent = error.message;
+            } finally {
+                languageSelect.disabled = false;
+                generateBtn.disabled = false;
+                previewBtn.disabled = false;
             }
-
-            voiceCount.textContent = `${builtInVoices.length} voices / ${
-                data.max_tokens_per_chunk || '-'
-            } token chunks`;
-            renderVoiceState();
         }
 
         async function fetchSpeech(text, target) {
